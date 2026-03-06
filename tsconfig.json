@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "noEmitOnError": false,  // Allow JS emission even with errors
+    "noImplicitAny": false,   // Temporarily allow 'any' type
+    "strict": false,          // Temporarily disable strict mode
+    "skipLibCheck": true,      // Skip type checking of declaration files
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}
