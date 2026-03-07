@@ -181,7 +181,6 @@ export class ShoppingListComponent {
     private renderLayout(): void {
         this.container.innerHTML = `
             <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${this.renderHeader()}
                 ${this.renderSearchSection()}
                 ${this.renderFeaturedSection()}
                 ${this.renderListSection()}
@@ -190,19 +189,6 @@ export class ShoppingListComponent {
         `;
     }
 
-    /**
-     * Render header section
-     */
-    private renderHeader(): string {
-        return `
-            <header style="margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 32px;">🛒</span>
-                    <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
-                </div>
-            </header>
-        `;
-    }
 
     /**
      * Render search section - soft grey focus
