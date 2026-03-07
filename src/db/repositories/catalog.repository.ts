@@ -1,5 +1,5 @@
 import { BaseRepository } from './base.repository';
-import { CatalogProduct, UUID, OperationResult } from '../../types/shopping-list.types';
+import { CatalogProduct, OperationResult } from '../../types/shopping-list.types';
 import { ShoppingListDBSchema } from '../../types/shopping-list.types';
 import { PRODUCT_CATALOG } from '../../data/product-catalog';
 

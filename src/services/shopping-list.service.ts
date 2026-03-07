@@ -8,7 +8,8 @@ import {
   OperationResult,
   ItemStatus,
   Priority,
-  Unit
+  Unit,
+  CatalogProduct
 } from '../types/shopping-list.types';
 import { generateId } from '../utils/id-generator.util';
 import { ErrorHandler } from '../utils/error-handler.util';
@@ -45,16 +46,15 @@ export class ShoppingListService {
         throw new Error(validation.errors.join(', '));
       }
 
-      // Create list with default values
+      // Create list with default values - REMOVE createdAt and updatedAt
       const result = await this.repository.create({
         name,
         description,
         ownerId,
         items: [],
         isArchived: false,
-        sharedWith: [],
-        createdAt: new Date(),
-        updatedAt: new Date()
+        sharedWith: []
+        // REMOVED: createdAt and updatedAt - repository adds them
       });
 
       this.errorHandler.logInfo('Shopping list created', { listId: result.data?.id });
@@ -222,21 +222,21 @@ export class ShoppingListService {
      * Initialize catalog (call this when app starts)
      */
     public async initializeCatalog(): Promise<void> {
-        await this.catalogRepo.initializeCatalog();
+        await this.catalogRepository.initializeCatalog();
     }
 
     /**
      * Search available products
      */
     public async searchProducts(query: string): Promise<OperationResult<CatalogProduct[]>> {
-        return this.catalogRepo.searchProducts(query);
+        return this.catalogRepository.searchProducts(query);
     }
 
     /**
      * Get popular products for quick add
      */
     public async getPopularProducts(): Promise<OperationResult<CatalogProduct[]>> {
-        return this.catalogRepo.getPopularProducts();
+        return this.catalogRepository.getPopularProducts();
     }
 
     /**
@@ -249,7 +249,7 @@ export class ShoppingListService {
     ): Promise<OperationResult<ShoppingList>> {
         try {
             // Get product from catalog
-            const productResult = await this.catalogRepo.findById(catalogProductId);
+            const productResult = await this.catalogRepository.findById(catalogProductId);
             if (!productResult.success || !productResult.data) {
                 throw new Error('Product not found in catalog');
             }
