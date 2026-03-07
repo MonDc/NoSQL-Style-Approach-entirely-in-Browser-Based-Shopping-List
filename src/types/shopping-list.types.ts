@@ -32,9 +32,24 @@ export enum Unit {
   BUNCH = 'bunch'
 }
 
+// Product catalog - master list of all possible items
+export interface CatalogProduct {
+    id: UUID;
+    name: string;           // "Milk"
+    defaultUnit: Unit;      // Usually how it's sold
+    defaultQuantity?: number; // e.g., 1
+    category: string;       // "Dairy", "Produce", etc.
+    subcategory?: string;
+    commonNames?: string[];  // Alternative names for search
+    popular: boolean;        // To show in "quick add" section
+    imageUrl?: string;
+    tags: string[];
+}
+
 // Main shopping list item interface
 export interface ShoppingListItem {
   id: UUID;
+  catalogProductId?: UUID;  // Link to master catalog (optional)
   name: string;
   quantity: number;
   unit: Unit;
@@ -66,7 +81,7 @@ export interface ShoppingList {
   tags?: string[];
 }
 
-// Database schema for IndexedDB
+// Database schema for IndexedDB - COMBINED VERSION
 export interface ShoppingListDBSchema {
   shoppingLists: {
     key: UUID;
@@ -88,6 +103,16 @@ export interface ShoppingListDBSchema {
       'by-category': string;
       'by-priority': Priority;
       'by-created': Date;
+    };
+  };
+  productCatalog: {  // NEW: Master catalog store
+    key: UUID;
+    value: CatalogProduct;
+    indexes: {
+      'by-name': string;
+      'by-category': string;
+      'by-popular': boolean;
+      'by-tags': string[];
     };
   };
 }

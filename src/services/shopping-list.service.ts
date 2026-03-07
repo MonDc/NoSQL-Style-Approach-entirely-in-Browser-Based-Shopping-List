@@ -1,4 +1,5 @@
 import { ShoppingListRepository } from '../db/repositories/shopping-list.repository';
+import { CatalogRepository } from '../db/repositories/catalog.repository';
 import { ShoppingListValidator } from './validators/shopping-list.validator';
 import { 
   ShoppingList, 
@@ -18,11 +19,13 @@ import { ErrorHandler } from '../utils/error-handler.util';
  */
 export class ShoppingListService {
   private repository: ShoppingListRepository;
+  private catalogRepository: CatalogRepository;
   private validator: ShoppingListValidator;
   private errorHandler: ErrorHandler;
 
   constructor() {
     this.repository = new ShoppingListRepository();
+    this.catalogRepository = new CatalogRepository();
     this.validator = new ShoppingListValidator();
     this.errorHandler = ErrorHandler.getInstance();
   }
@@ -213,4 +216,65 @@ export class ShoppingListService {
       }
     });
   }
+
+
+    /**
+     * Initialize catalog (call this when app starts)
+     */
+    public async initializeCatalog(): Promise<void> {
+        await this.catalogRepo.initializeCatalog();
+    }
+
+    /**
+     * Search available products
+     */
+    public async searchProducts(query: string): Promise<OperationResult<CatalogProduct[]>> {
+        return this.catalogRepo.searchProducts(query);
+    }
+
+    /**
+     * Get popular products for quick add
+     */
+    public async getPopularProducts(): Promise<OperationResult<CatalogProduct[]>> {
+        return this.catalogRepo.getPopularProducts();
+    }
+
+    /**
+     * Add item from catalog to list
+     */
+    public async addCatalogItemToList(
+        listId: UUID,
+        catalogProductId: UUID,
+        customQuantity?: number
+    ): Promise<OperationResult<ShoppingList>> {
+        try {
+            // Get product from catalog
+            const productResult = await this.catalogRepo.findById(catalogProductId);
+            if (!productResult.success || !productResult.data) {
+                throw new Error('Product not found in catalog');
+            }
+
+            const product = productResult.data;
+
+            // Create shopping list item from catalog product
+            const newItem: ShoppingListItem = {
+                id: generateId(),
+                catalogProductId: product.id,
+                name: product.name,
+                quantity: customQuantity || product.defaultQuantity || 1,
+                unit: product.defaultUnit,
+                category: product.category,
+                priority: Priority.MEDIUM,
+                status: ItemStatus.PENDING,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                tags: product.tags
+            };
+
+            // Add to list
+            return this.repository.addItemToList(listId, newItem);
+        } catch (error) {
+            return this.errorHandler.handleError(error, 'Failed to add catalog item to list');
+        }
+    }
 }

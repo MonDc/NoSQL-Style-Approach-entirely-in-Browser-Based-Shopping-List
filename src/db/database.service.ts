@@ -3,7 +3,7 @@ import { ShoppingListDBSchema, ShoppingList, ShoppingListItem, UUID } from '../t
 
 // Database name and version
 const DB_NAME = 'shopping-list-app';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /**
  * Service that manages IndexedDB connection and schema
@@ -72,6 +72,18 @@ export class DatabaseService {
             itemsStore.createIndex('by-category', 'category');
             itemsStore.createIndex('by-priority', 'priority');
             itemsStore.createIndex('by-created', 'createdAt');
+          }
+
+            // In the upgrade function, add:
+          if (!db.objectStoreNames.contains('productCatalog')) {
+              const catalogStore = db.createObjectStore('productCatalog', { 
+                  keyPath: 'id' 
+              });
+              
+              catalogStore.createIndex('by-name', 'name');
+              catalogStore.createIndex('by-category', 'category');
+              catalogStore.createIndex('by-popular', 'popular');
+              catalogStore.createIndex('by-tags', 'tags', { multiEntry: true });
           }
         },
       });
