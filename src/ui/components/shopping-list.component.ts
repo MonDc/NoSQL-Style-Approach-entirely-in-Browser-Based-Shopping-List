@@ -176,7 +176,6 @@ private async initializeSwipeableGrid(): Promise<void> {
                 ${this.renderHeader()}
                 ${this.renderSearchSection()}
                 ${this.renderFeaturedSection()}
-                ${this.renderAddFormContainer()}
                 ${this.renderListSection()}
                 ${this.renderActionsSection()}
             </div>
@@ -193,7 +192,7 @@ private async initializeSwipeableGrid(): Promise<void> {
                     <span style="font-size: 32px;">🛒</span>
                     <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
                 </div>
-                <div class="list-summary" style="font-size: 14px; color: #666; margin-top: 8px; margin-left: 40px;"></div>
+                <!-- Removed list-summary div -->
             </header>
         `;
     }
@@ -229,13 +228,6 @@ private async initializeSwipeableGrid(): Promise<void> {
     }
 
     /**
-     * Render add form container
-     */
-    private renderAddFormContainer(): string {
-        return `<div class="add-form-container" style="margin-bottom: 30px;"></div>`;
-    }
-
-    /**
      * Render shopping list section
      */
     private renderListSection(): string {
@@ -265,6 +257,8 @@ private async initializeSwipeableGrid(): Promise<void> {
             </div>
         `;
     }
+
+
 
     /**
      * Cache DOM elements for faster access
@@ -302,32 +296,15 @@ private async initializeSwipeableGrid(): Promise<void> {
     /**
      * Load all initial data
      */
-private async loadInitialData(): Promise<void> {
-    await Promise.all([
-        this.loadListData(),
-        this.initializeSwipeableGrid()
-    ]);
-    
-    this.initAddItemForm();
-    this.subscribeToListUpdates();
-}
-
-private showGridError(): void {
-    if (this.elements.categoryProducts) {
-        this.elements.categoryProducts.innerHTML = `
-            <div style="
-                text-align: center;
-                padding: 40px;
-                color: #999;
-                background: #f9f9f9;
-                border-radius: 12px;
-            ">
-                <span style="font-size: 32px; display: block; margin-bottom: 8px;">😕</span>
-                Failed to load items
-            </div>
-        `;
+    private async loadInitialData(): Promise<void> {
+        await Promise.all([
+            this.loadListData(),
+            this.initializeSwipeableGrid()
+        ]);
+        
+        // Removed initAddItemForm()
+        this.subscribeToListUpdates();
     }
-}
     /**
      * Load current list data
      */
@@ -688,25 +665,25 @@ private showGridError(): void {
         setTimeout(() => errorDiv.remove(), 5000);
     }
 
-/**
- * Clean up resources
- */
-public destroy(): void {
-    if (this.unsubscribe) {
-        this.unsubscribe();
+    /**
+     * Clean up resources
+     */
+    public destroy(): void {
+        if (this.unsubscribe) {
+            this.unsubscribe();
+        }
+        
+        this.listItemComponents.clear();
+        
+        if (this.addItemForm) {
+            this.addItemForm.destroy();
+        }
+        
+        // Add this line to clean up the swipeable grid
+        if (this.swipeableGrid) {
+            this.swipeableGrid.destroy();
+        }
+        
+        this.container.innerHTML = '';
     }
-    
-    this.listItemComponents.clear();
-    
-    if (this.addItemForm) {
-        this.addItemForm.destroy();
-    }
-    
-    // Add this line to clean up the swipeable grid
-    if (this.swipeableGrid) {
-        this.swipeableGrid.destroy();
-    }
-    
-    this.container.innerHTML = '';
-}
 }
