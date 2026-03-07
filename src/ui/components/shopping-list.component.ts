@@ -228,7 +228,7 @@ export class ShoppingListComponent {
         let timeout: NodeJS.Timeout;
         this.elements.searchInput?.addEventListener('input', () => {
             clearTimeout(timeout);
-            timeout = setTimeout(() => this.handleSearch(), 300);
+            timeout = setTimeout(() => this.handleSearch(), 150); // Changed from 300ms to 150ms
         });
 
         // List actions
@@ -459,56 +459,103 @@ export class ShoppingListComponent {
         }
     }
     
-    /**
-     * Handle search input
-     */
-    private async handleSearch(): Promise<void> {
-        const query = this.elements.searchInput?.value.trim() || '';
-        
-        if (!this.elements.searchResults) return;
-        
-        if (query.length < 2) {
-            this.elements.searchResults.innerHTML = '';
+/**
+ * Handle search input
+ */
+private async handleSearch(): Promise<void> {
+    const query = this.elements.searchInput?.value.trim() || '';
+    
+    if (!this.elements.searchResults) return;
+    
+    // CHANGE THIS: Show results from first character, not second
+    if (query.length < 1) {  // Changed from 2 to 1
+        this.elements.searchResults.innerHTML = '';
+        return;
+    }
+    
+    this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Searching...</div>';
+    
+    const results = await this.service.searchProducts(query);
+    
+    if (results.success && results.data) {
+        if (results.data.length === 0) {
+            this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No products found</div>';
             return;
         }
         
-        this.elements.searchResults.innerHTML = '<div style="text-align: center;">Searching...</div>';
-        
-        const results = await this.service.searchProducts(query);
-        
-        if (results.success && results.data) {
-            if (results.data.length === 0) {
-                this.elements.searchResults.innerHTML = '<div style="text-align: center; color: #999;">No products found</div>';
-                return;
-            }
-            
-            this.elements.searchResults.innerHTML = results.data.map(product => `
-                <div style="padding: 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between;">
-                    <span>
-                        <strong>${product.name}</strong>
-                        <span style="color: #666; margin-left: 8px;">${product.category}</span>
+        this.elements.searchResults.innerHTML = results.data.map(product => `
+            <div style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <strong style="font-size: 16px;">${product.name}</strong>
+                    <span style="color: #666; margin-left: 8px; font-size: 12px; background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">
+                        ${product.category}
                     </span>
-                    <button class="add-search" data-product-id="${product.id}" data-product-name="${product.name}"
-                        style="background: #4CAF50; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer;">
-                        Add
-                    </button>
                 </div>
-            `).join('');
-            
-            this.elements.searchResults.querySelectorAll('.add-search').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const target = e.target as HTMLElement;
-                    const productId = target.getAttribute('data-product-id');
-                    const productName = target.getAttribute('data-product-name');
-                    if (productId && productName) {
-                        this.addCatalogItem(productId, productName);
-                        this.elements.searchInput!.value = '';
-                        this.elements.searchResults!.innerHTML = '';
-                    }
-                });
-            });
-        }
+                <button class="add-search-btn" data-product-id="${product.id}" data-product-name="${product.name}"
+                    style="background: #4CAF50; color: white; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;">
+                    Add
+                </button>
+            </div>
+        `).join('');
+        
+        // Add click handlers (same as before)
+        this.attachSearchButtonHandlers();
     }
+}
+
+/**
+ * Attach handlers to search buttons
+ */
+private attachSearchButtonHandlers(): void {
+    this.elements.searchResults?.querySelectorAll('.add-search-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const button = e.currentTarget as HTMLButtonElement;
+            const productId = button.getAttribute('data-product-id');
+            const productName = button.getAttribute('data-product-name');
+            const resultDiv = button.closest('div');
+            
+            if (!productId || !productName) return;
+            
+            try {
+                if (resultDiv) {
+                    (resultDiv as HTMLElement).style.transition = 'all 0.3s';
+                    (resultDiv as HTMLElement).style.opacity = '0.5';
+                }
+                
+                button.disabled = true;
+                button.textContent = '✓ Adding...';
+                
+                await this.addCatalogItem(productId, productName);
+                
+                if (resultDiv) {
+                    (resultDiv as HTMLElement).style.opacity = '0';
+                    (resultDiv as HTMLElement).style.transform = 'translateX(20px)';
+                    
+                    setTimeout(() => {
+                        resultDiv.remove();
+                        if (this.elements.searchResults?.children.length === 0) {
+                            this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No more results</div>';
+                        }
+                    }, 300);
+                }
+                
+            } catch (error) {
+                console.error('Error adding item:', error);
+                button.textContent = '✗ Failed';
+                button.style.background = '#f44336';
+                
+                setTimeout(() => {
+                    button.disabled = false;
+                    button.style.background = '#4CAF50';
+                    button.textContent = 'Add';
+                    if (resultDiv) {
+                        (resultDiv as HTMLElement).style.opacity = '1';
+                    }
+                }, 2000);
+            }
+        });
+    });
+}
 
     /**
      * Initialize the add item form
