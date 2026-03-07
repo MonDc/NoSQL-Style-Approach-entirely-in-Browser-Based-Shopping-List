@@ -108,44 +108,52 @@ export class ShoppingListComponent {
         }
     }
 
-// In shopping-list.component.ts
-private async initializeSwipeableGrid(): Promise<void> {
-    if (!this.elements.categoryProducts) return;
-    
-    try {
-        const result = await this.catalogRepo.findAll();
-        
-        if (result.success && result.data) {
-            this.swipeableGrid = new SwipeableGrid(
-                result.data,
-                {
-                    onItemClick: (product) => this.addCatalogItem(product.id, product.name),
-                    onPageChange: (page) => console.log('Page:', page + 1)
-                },
-                {
-                    dimensions: {
-                        rows: 2,
-                        columns: 2,
-                        gap: 18  // Slightly larger gap
-                    },
-                    styling: {
-                        cardPadding: '24px 12px',  // Larger cards
-                        emojiSize: '48px',          // Larger emoji
-                        nameFontSize: '16px',        // Larger text
-                        cardBorderRadius: '18px'     // Slightly rounded
-                    }
-                }
-            );
-            
-            this.elements.categoryProducts.innerHTML = '';
-            this.elements.categoryProducts.appendChild(this.swipeableGrid.getElement());
-        }
-    } catch (error) {
-        console.error('Error initializing swipeable grid:', error);
-    }
-}
-
     /**
+     * Initialize the swipeable grid with all products
+     */
+    private async initializeSwipeableGrid(): Promise<void> {
+        if (!this.elements.categoryProducts) return;
+        
+        try {
+            const result = await this.catalogRepo.findAll();
+            
+            if (result.success && result.data) {
+                this.swipeableGrid = new SwipeableGrid(
+                    result.data,
+                    {
+                        onItemClick: (product) => this.addCatalogItem(product.id, product.name),
+                        onPageChange: (page) => console.log('Swiped to page:', page + 1)
+                    },
+                    {
+                        dimensions: {
+                            rows: 2,
+                            columns: 2,
+                            gap: 18
+                        },
+                        behavior: {
+                            infinite: true,
+                            swipeThreshold: 50,
+                            showDots: false,  // ← This removes the dots
+                            transitionDuration: 300
+                        },
+                        styling: {
+                            cardPadding: '24px 12px',
+                            emojiSize: '48px',
+                            nameFontSize: '16px',
+                            cardBorderRadius: '18px'
+                        }
+                    }
+                );
+                
+                this.elements.categoryProducts.innerHTML = '';
+                this.elements.categoryProducts.appendChild(this.swipeableGrid.getElement());
+            }
+        } catch (error) {
+            console.error('Error initializing swipeable grid:', error);
+            this.showError('Failed to load products');  // ← Use showError instead
+        }
+    }
+        /**
      * Create or get today's shopping list
      */
     private async ensureListExists(): Promise<void> {
@@ -167,140 +175,140 @@ private async initializeSwipeableGrid(): Promise<void> {
         }
     }
 
-/**
- * Render the main layout structure
- */
-private renderLayout(): void {
-    this.container.innerHTML = `
-        <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            ${this.renderHeader()}
-            ${this.renderSearchSection()}
-            ${this.renderFeaturedSection()}
-            ${this.renderListSection()}
-            ${this.renderActionsSection()}
-        </div>
-    `;
-}
-
-/**
- * Render header section
- */
-private renderHeader(): string {
-    return `
-        <header style="margin-bottom: 20px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 32px;">🛒</span>
-                <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
-            </div>
-        </header>
-    `;
-}
-
-/**
- * Render search section - soft grey focus
- */
-private renderSearchSection(): string {
-    return `
-        <section style="margin-bottom: 30px;">
-            <input 
-                type="text" 
-                class="search-input" 
-                placeholder="🔍" 
-                style="
-                    width: 100%; 
-                    padding: 14px 16px; 
-                    font-size: 16px; 
-                    border: 2px solid #e0e0e0; 
-                    border-radius: 30px; 
-                    box-sizing: border-box; 
-                    background: #f8f8f8;
-                    outline: none;
-                    transition: all 0.3s ease;
-                "
-                onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
-                onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8'; this.style.boxShadow='none';"
-            />
-            <div class="search-results" style="margin-top: 12px;"></div>
-        </section>
-    `;
-}
-
-/**
- * Render featured items section - no "Featured Items" text
- */
-private renderFeaturedSection(): string {
-    return `
-        <section style="margin-bottom: 30px;">
-            <div class="category-products" style="min-height: 200px;"></div>
-        </section>
-    `;
-}
-
-/**
- * Render shopping list section - no text, no count, just the list
- */
-private renderListSection(): string {
-    return `
-        <section style="margin-bottom: 30px;">
-            <div class="items-list" style="background: #f9f9f9; border-radius: 12px; padding: 16px; min-height: 100px;"></div>
-        </section>
-    `;
-}
-
-/**
- * Render action buttons section
- */
-private renderActionsSection(): string {
-    return `
-        <div style="display: flex; gap: 10px; justify-content: flex-end;">
-            <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                Archive
-            </button>
-            <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                Clear
-            </button>
-        </div>
-    `;
-}
     /**
-     * Cache DOM elements for faster access
+     * Render the main layout structure
      */
-    private cacheElements(): void {
-        this.elements = {
-            listTitle: this.container.querySelector('.list-title'),
-            listSummary: this.container.querySelector('.list-summary'),
-            itemsList: this.container.querySelector('.items-list'),
-            categoryProducts: this.container.querySelector('.category-products'),
-            searchInput: this.container.querySelector('.search-input'),
-            searchResults: this.container.querySelector('.search-results'),
-            itemCount: this.container.querySelector('.item-count'),
-            archiveBtn: this.container.querySelector('.archive-list'),
-            clearBtn: this.container.querySelector('.clear-completed')
-        };
+    private renderLayout(): void {
+        this.container.innerHTML = `
+            <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                ${this.renderHeader()}
+                ${this.renderSearchSection()}
+                ${this.renderFeaturedSection()}
+                ${this.renderListSection()}
+                ${this.renderActionsSection()}
+            </div>
+        `;
     }
 
-/**
- * Setup global event listeners
- */
-private setupEventListeners(): void {
-    // Search with debounce - REPLACE YOUR EXISTING SEARCH CODE WITH THIS
-    let timeout: number;
-    this.elements.searchInput?.addEventListener('input', (e) => {
-        clearTimeout(timeout);
-        timeout = window.setTimeout(() => {
-            const query = (e.target as HTMLInputElement).value;
-            if (query.length === 0) {
-                this.clearSearch(); // Restore original order when empty
-            } else {
-                this.handleSearch();
-            }
-        }, this.DEBOUNCE_DELAY);
-    });
+    /**
+     * Render header section
+     */
+    private renderHeader(): string {
+        return `
+            <header style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 32px;">🛒</span>
+                    <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
+                </div>
+            </header>
+        `;
+    }
 
-    // Action buttons
-    this.elements.archiveBtn?.addEventListener('click', () => this.archiveList());
-    this.elements.clearBtn?.addEventListener('click', () => this.clearCompleted());
-}
+    /**
+     * Render search section - soft grey focus
+     */
+    private renderSearchSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <input 
+                    type="text" 
+                    class="search-input" 
+                    placeholder="🔍" 
+                    style="
+                        width: 100%; 
+                        padding: 14px 16px; 
+                        font-size: 16px; 
+                        border: 2px solid #e0e0e0; 
+                        border-radius: 30px; 
+                        box-sizing: border-box; 
+                        background: #f8f8f8;
+                        outline: none;
+                        transition: all 0.3s ease;
+                    "
+                    onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
+                    onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8'; this.style.boxShadow='none';"
+                />
+                <div class="search-results" style="margin-top: 12px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render featured items section - no "Featured Items" text
+     */
+    private renderFeaturedSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <div class="category-products" style="min-height: 200px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render shopping list section - no text, no count, just the list
+     */
+    private renderListSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <div class="items-list" style="background: #f9f9f9; border-radius: 12px; padding: 16px; min-height: 100px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render action buttons section
+     */
+    private renderActionsSection(): string {
+        return `
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Archive
+                </button>
+                <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Clear
+                </button>
+            </div>
+        `;
+    }
+        /**
+         * Cache DOM elements for faster access
+         */
+        private cacheElements(): void {
+            this.elements = {
+                listTitle: this.container.querySelector('.list-title'),
+                listSummary: this.container.querySelector('.list-summary'),
+                itemsList: this.container.querySelector('.items-list'),
+                categoryProducts: this.container.querySelector('.category-products'),
+                searchInput: this.container.querySelector('.search-input'),
+                searchResults: this.container.querySelector('.search-results'),
+                itemCount: this.container.querySelector('.item-count'),
+                archiveBtn: this.container.querySelector('.archive-list'),
+                clearBtn: this.container.querySelector('.clear-completed')
+            };
+        }
+
+    /**
+     * Setup global event listeners
+     */
+    private setupEventListeners(): void {
+        // Search with debounce - REPLACE YOUR EXISTING SEARCH CODE WITH THIS
+        let timeout: number;
+        this.elements.searchInput?.addEventListener('input', (e) => {
+            clearTimeout(timeout);
+            timeout = window.setTimeout(() => {
+                const query = (e.target as HTMLInputElement).value;
+                if (query.length === 0) {
+                    this.clearSearch(); // Restore original order when empty
+                } else {
+                    this.handleSearch();
+                }
+            }, this.DEBOUNCE_DELAY);
+        });
+
+        // Action buttons
+        this.elements.archiveBtn?.addEventListener('click', () => this.archiveList());
+        this.elements.clearBtn?.addEventListener('click', () => this.clearCompleted());
+    }
 
     /**
      * Load all initial data
@@ -407,92 +415,92 @@ private setupEventListeners(): void {
         }
     }
 
-/**
- * Handle search input - matching items appear at top-left of grid
- */
-private async handleSearch(): Promise<void> {
-    const query = this.elements.searchInput?.value.trim().toLowerCase() || '';
-    console.log('🔍 Searching for:', query);
-    
-    if (!this.swipeableGrid) {
-        console.log('❌ No swipeable grid found');
-        return;
-    }
-    
-    if (query.length === 0) {
-        await this.clearSearch();
-        return;
-    }
-    
-    try {
-        const result = await this.catalogRepo.findAll();
+    /**
+     * Handle search input - matching items appear at top-left of grid
+     */
+    private async handleSearch(): Promise<void> {
+        const query = this.elements.searchInput?.value.trim().toLowerCase() || '';
+        console.log('🔍 Searching for:', query);
         
-        if (result.success && result.data) {
-            // Split into matching and non-matching
-            const matching: CatalogProduct[] = [];
-            const nonMatching: CatalogProduct[] = [];
+        if (!this.swipeableGrid) {
+            console.log('❌ No swipeable grid found');
+            return;
+        }
+        
+        if (query.length === 0) {
+            await this.clearSearch();
+            return;
+        }
+        
+        try {
+            const result = await this.catalogRepo.findAll();
             
-            result.data.forEach(product => {
-                if (product.name.toLowerCase().includes(query)) {
-                    matching.push(product);
-                } else {
-                    nonMatching.push(product);
+            if (result.success && result.data) {
+                // Split into matching and non-matching
+                const matching: CatalogProduct[] = [];
+                const nonMatching: CatalogProduct[] = [];
+                
+                result.data.forEach(product => {
+                    if (product.name.toLowerCase().includes(query)) {
+                        matching.push(product);
+                    } else {
+                        nonMatching.push(product);
+                    }
+                });
+                
+                // Sort matching items by name (optional)
+                matching.sort((a, b) => a.name.localeCompare(b.name));
+                
+                // Sort non-matching items by name (optional)
+                nonMatching.sort((a, b) => a.name.localeCompare(b.name));
+                
+                // Reorder: matching first (will appear in top-left of page 1), then non-matching
+                const reordered = [...matching, ...nonMatching];
+                
+                console.log(`✅ ${matching.length} matching items will appear at top-left`);
+                
+                // Update grid with new order
+                this.swipeableGrid.updateProducts(reordered);
+                
+                // Go to first page to show matches at top-left
+                if (matching.length > 0) {
+                    this.swipeableGrid.goToFirstPage();
                 }
-            });
+            }
+        } catch (error) {
+            console.error('❌ Error during search reorder:', error);
+        }
+    }
+
+    /**
+     * Clear search and restore original order
+     */
+    private async clearSearch(): Promise<void> {
+        console.log('🧹 Clearing search'); // DEBUG
+        
+        if (!this.swipeableGrid) {
+            console.log('❌ No swipeable grid found'); // DEBUG
+            return;
+        }
+        
+        try {
+            const result = await this.catalogRepo.findAll();
+            console.log('📦 Fetching original order:', result); // DEBUG
             
-            // Sort matching items by name (optional)
-            matching.sort((a, b) => a.name.localeCompare(b.name));
-            
-            // Sort non-matching items by name (optional)
-            nonMatching.sort((a, b) => a.name.localeCompare(b.name));
-            
-            // Reorder: matching first (will appear in top-left of page 1), then non-matching
-            const reordered = [...matching, ...nonMatching];
-            
-            console.log(`✅ ${matching.length} matching items will appear at top-left`);
-            
-            // Update grid with new order
-            this.swipeableGrid.updateProducts(reordered);
-            
-            // Go to first page to show matches at top-left
-            if (matching.length > 0) {
+            if (result.success && result.data) {
+                // Restore original order (by name)
+                const sorted = [...result.data].sort((a, b) => 
+                    a.name.localeCompare(b.name)
+                );
+                console.log('✅ Restored sorted order:', sorted.length); // DEBUG
+                
+                this.swipeableGrid.updateProducts(sorted);
                 this.swipeableGrid.goToFirstPage();
             }
+        } catch (error) {
+            console.error('❌ Error clearing search:', error);
         }
-    } catch (error) {
-        console.error('❌ Error during search reorder:', error);
     }
-}
-
-/**
- * Clear search and restore original order
- */
-private async clearSearch(): Promise<void> {
-    console.log('🧹 Clearing search'); // DEBUG
-    
-    if (!this.swipeableGrid) {
-        console.log('❌ No swipeable grid found'); // DEBUG
-        return;
-    }
-    
-    try {
-        const result = await this.catalogRepo.findAll();
-        console.log('📦 Fetching original order:', result); // DEBUG
-        
-        if (result.success && result.data) {
-            // Restore original order (by name)
-            const sorted = [...result.data].sort((a, b) => 
-                a.name.localeCompare(b.name)
-            );
-            console.log('✅ Restored sorted order:', sorted.length); // DEBUG
-            
-            this.swipeableGrid.updateProducts(sorted);
-            this.swipeableGrid.goToFirstPage();
-        }
-    } catch (error) {
-        console.error('❌ Error clearing search:', error);
-    }
-}
 
     /**
      * Add item from catalog to list
