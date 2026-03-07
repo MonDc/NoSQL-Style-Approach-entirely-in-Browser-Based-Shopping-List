@@ -20,38 +20,33 @@
     </div>
 
     <script>
-        // Global error handler to display errors on page
         window.addEventListener('error', function(event) {
-            const errorPanel = document.getElementById('error-panel');
-            const errorMsg = document.getElementById('error-message');
-            errorMsg.textContent = event.error ? event.error.stack : event.message;
-            errorPanel.style.display = 'block';
-            console.error('Global error:', event.error);
+            const panel = document.getElementById('error-panel');
+            const msg = document.getElementById('error-message');
+            msg.textContent = event.error ? event.error.stack : event.message;
+            panel.style.display = 'block';
+            console.error(event.error);
         });
-
         window.addEventListener('unhandledrejection', function(event) {
-            const errorPanel = document.getElementById('error-panel');
-            const errorMsg = document.getElementById('error-message');
-            errorMsg.textContent = event.reason ? (event.reason.stack || event.reason) : 'Unhandled promise rejection';
-            errorPanel.style.display = 'block';
-            console.error('Unhandled rejection:', event.reason);
+            const panel = document.getElementById('error-panel');
+            const msg = document.getElementById('error-message');
+            msg.textContent = event.reason ? (event.reason.stack || event.reason) : 'Unhandled rejection';
+            panel.style.display = 'block';
+            console.error(event.reason);
         });
     </script>
 
-    <!-- Polyfill for older mobile browsers -->
     <script>
         if (!crypto.randomUUID) {
             crypto.randomUUID = function() {
                 return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                    var r = Math.random() * 16 | 0;
-                    var v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
                     return v.toString(16);
                 });
             };
         }
     </script>
 
-    <!-- Main app script -->
     <script type="module" src="/src/ui/pages/app.component.ts"></script>
 </body>
 </html>

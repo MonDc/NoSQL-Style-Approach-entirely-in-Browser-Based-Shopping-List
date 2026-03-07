@@ -103,52 +103,33 @@ export class ShoppingListComponent {
         this.container.innerHTML = `
             <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <!-- Header -->
-                <header style="margin-bottom: 30px;">
-                    <h1 style="display: flex; align-items: center; gap: 10px; margin: 0;">
-                        🛒 Shopping List
-                        <span class="list-title" style="font-size: 16px; color: #666; font-weight: normal;">
-                            Loading...
-                        </span>
-                    </h1>
-                    <div class="list-summary" style="margin-top: 10px; font-size: 14px; color: #666;"></div>
-                </header>
-
-                <!-- Category Tabs -->
-                <div class="category-tabs" style="margin-bottom: 30px;">
-                    <div style="display: flex; gap: 10px; overflow-x: auto; padding: 5px 0;">
-                        <button class="category-btn active" data-category="all" 
-                            style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer;">
-                            All
-                        </button>
-                        ${this.renderCategoryButtons()}
-                    </div>
-                </div>
-
-                <!-- Popular Items -->
-                <section style="margin-bottom: 30px;">
-                    <h3 style="margin-bottom: 10px;">🔥 Popular Items</h3>
-                    <div class="popular-items" style="display: flex; gap: 10px; flex-wrap: wrap;"></div>
-                </section>
+                    <header style="margin-bottom: 20px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 32px;">🛒</span>
+                            <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
+                        </div>
+                        <div class="list-summary" style="font-size: 14px; color: #666; margin-top: 8px; margin-left: 40px;"></div>
+                    </header>
 
                 <!-- Search -->
                 <section style="margin-bottom: 30px;">
-                    <h3 style="margin-bottom: 10px;">🔍 Search Catalog</h3>
+                    <h3 style="margin-bottom: 10px;">🔍 Search</h3>
                     <input 
                         type="text" 
                         class="search-input" 
-                        placeholder="Type to search..." 
+                        placeholder="Search for items..." 
                         style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;"
                     />
                     <div class="search-results" style="margin-top: 10px;"></div>
                 </section>
 
-                <!-- Category Products -->
+                <!-- Featured Items (8 items) -->
                 <section style="margin-bottom: 30px;">
-                    <h3 style="margin-bottom: 10px;">📦 Products by Category</h3>
+                    <h3 style="margin-bottom: 10px;">⭐ Featured Items</h3>
                     <div class="category-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;"></div>
                 </section>
 
-                <!-- Add Item Form -->
+                <!-- Add Item Form (optional, you can keep or remove) -->
                 <div class="add-form-container" style="margin-bottom: 30px;"></div>
 
                 <!-- My List -->
@@ -269,7 +250,9 @@ export class ShoppingListComponent {
         
         // Update title
         if (this.elements.listTitle) {
-            this.elements.listTitle.textContent = this.currentList.name;
+            //this.elements.listTitle.textContent = this.currentList.name;
+                // Remove the date part - just show the list name without "Shopping List" text
+            this.elements.listTitle.textContent = ''; // Empty, since we only want the icon
         }
         
         // Update item count
