@@ -78,14 +78,35 @@ export class CatalogRepository extends BaseRepository<CatalogProduct, ShoppingLi
     public async getPopularProducts(): Promise<OperationResult<CatalogProduct[]>> {
         try {
             const db = await this.getDb();
-            const index = db.transaction(this.storeName).store.index('by-popular');
-            const products = await index.getAll(true);
+            
+            // Check if the index exists first
+            const store = db.transaction(this.storeName).store;
+            
+            if (!store.indexNames.contains('by-popular')) {
+                console.warn('⚠️ by-popular index not found, returning all products');
+                // Fallback: return all products and filter manually
+                const all = await this.findAll();
+                if (all.success && all.data) {
+                    const popular = all.data.filter(p => p.popular === true);
+                    return {
+                        success: true,
+                        data: popular
+                    };
+                }
+                return all;
+            }
+            
+            // For boolean indexes, we need to pass the boolean value
+            // TypeScript expects IDBKeyRange or IDBValidKey, but boolean works at runtime
+            const index = store.index('by-popular');
+            const products = await index.getAll(IDBKeyRange.only(true));
 
             return {
                 success: true,
                 data: products
             };
         } catch (error) {
+            console.error('Error in getPopularProducts:', error);
             return this.handleError(error, 'Failed to get popular products');
         }
     }

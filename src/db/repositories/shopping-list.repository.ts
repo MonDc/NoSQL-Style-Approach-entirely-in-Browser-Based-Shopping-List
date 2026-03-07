@@ -37,18 +37,18 @@ export class ShoppingListRepository extends BaseRepository<ShoppingList, Shoppin
    * Find active (non-archived) lists
    */
   public async findActiveLists(): Promise<OperationResult<ShoppingList[]>> {
-    try {
-      const db = await this.getDb();
-      const index = db.transaction(this.storeName).store.index('by-archived');
-      const lists = await index.getAll(false);
+      try {
+          const db = await this.getDb();
+          const index = db.transaction(this.storeName).store.index('by-archived');
+          const lists = await index.getAll(IDBKeyRange.only(false));
 
-      return {
-        success: true,
-        data: lists
-      };
-    } catch (error) {
-      return this.handleError<ShoppingList[]>(error, 'Failed to find active lists');
-    }
+          return {
+              success: true,
+              data: lists
+          };
+      } catch (error) {
+          return this.handleError<ShoppingList[]>(error, 'Failed to find active lists');
+      }
   }
 
   /**
