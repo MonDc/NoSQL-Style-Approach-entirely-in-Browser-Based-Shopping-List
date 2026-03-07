@@ -2,7 +2,7 @@ import { ShoppingListRepository } from '../db/repositories/shopping-list.reposit
 import { CatalogRepository } from '../db/repositories/catalog.repository';
 import { ShoppingListValidator } from './validators/shopping-list.validator';
 import { 
-  ShoppingList as IShoppingList, 
+
   ShoppingListItem as IShoppingListItem,
   UUID, 
   OperationResult,
@@ -11,7 +11,7 @@ import {
   Unit,
   CatalogProduct
 } from '../types/shopping-list.types';
-import { ShoppingList, ShoppingListItem } from '../models/shopping-list.model';
+import { ShoppingList } from '../models/shopping-list.model';
 import { generateId } from '../utils/id-generator.util';
 import { ErrorHandler } from '../utils/error-handler.util';
 

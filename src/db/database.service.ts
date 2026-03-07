@@ -1,5 +1,5 @@
-import { DBSchema, IDBPDatabase, openDB } from 'idb';
-import { ShoppingListDBSchema, ShoppingList, ShoppingListItem, UUID } from '../types/shopping-list.types';
+import { IDBPDatabase, openDB } from 'idb';
+import { ShoppingListDBSchema } from '../types/shopping-list.types';
 
 // Database name and version
 const DB_NAME = 'shopping-list-app';
@@ -43,7 +43,7 @@ export class DatabaseService {
   private async createDatabase(): Promise<void> {
     try {
       this.db = await openDB<ShoppingListDBSchema>(DB_NAME, DB_VERSION, {
-        upgrade(db, oldVersion, newVersion, transaction) {
+        upgrade(db, oldVersion, newVersion) {
           console.log(`Upgrading database from ${oldVersion} to ${newVersion}`);
 
           // Create shopping lists store

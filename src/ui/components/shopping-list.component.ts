@@ -1,11 +1,9 @@
 import { ShoppingListService } from '../../services/shopping-list.service';
 import { CatalogRepository } from '../../db/repositories/catalog.repository';
 import { 
-    ShoppingList, 
-    ShoppingListItem, 
+    ShoppingList,  
     UUID, 
     Unit,
-    Priority,
     CatalogProduct 
 } from '../../types/shopping-list.types';
 import { ListItemComponent, ListItemCallbacks } from './list-item.component';
@@ -575,13 +573,13 @@ private attachSearchButtonHandlers(): void {
         container.appendChild(this.addItemForm.getElement());
     }
 
-    /**
-     * Toggle item status (complete/incomplete)
-     */
-    private async toggleItem(itemId: UUID): Promise<void> {
-        if (!this.currentListId) return;
-        await this.service.toggleItemStatus(this.currentListId, itemId);
-    }
+    // /**
+    //  * Toggle item status (complete/incomplete)
+    //  */
+    // private async toggleItem(itemId: UUID): Promise<void> {
+    //     if (!this.currentListId) return;
+    //     await this.service.toggleItemStatus(this.currentListId, itemId);
+    // }
 
 
     /**
@@ -607,7 +605,7 @@ private attachSearchButtonHandlers(): void {
             const buttons = document.querySelectorAll(`[data-product-id="${productId}"]`);
             buttons.forEach(btn => {
                 const originalHTML = btn.innerHTML;
-                const originalText = btn.textContent;
+                //const originalText = btn.textContent;
                 
                 // Save original for restoration
                 (btn as any)._originalHTML = originalHTML;

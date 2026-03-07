@@ -4,9 +4,10 @@
   "description": "Browser-based shopping list with IndexedDB",
   "main": "dist/app.js",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --host",
+    "mobile": "npm run build && npm run preview"
   },
   "dependencies": {
     "idb": "^8.0.0"

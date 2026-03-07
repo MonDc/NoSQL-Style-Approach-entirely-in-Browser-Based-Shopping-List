@@ -5,23 +5,54 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping List App</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        #app {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+        #app { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #error-panel { margin-top: 20px; padding: 10px; background: #ffebee; border-left: 4px solid #f44336; display: none; }
+        .error-title { font-weight: bold; color: #b71c1c; }
+        .error-message { font-family: monospace; white-space: pre-wrap; }
     </style>
 </head>
 <body>
     <div id="app"></div>
+    <div id="error-panel">
+        <div class="error-title">⚠️ Application Error</div>
+        <div class="error-message" id="error-message"></div>
+    </div>
+
+    <script>
+        // Global error handler to display errors on page
+        window.addEventListener('error', function(event) {
+            const errorPanel = document.getElementById('error-panel');
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.textContent = event.error ? event.error.stack : event.message;
+            errorPanel.style.display = 'block';
+            console.error('Global error:', event.error);
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+            const errorPanel = document.getElementById('error-panel');
+            const errorMsg = document.getElementById('error-message');
+            errorMsg.textContent = event.reason ? (event.reason.stack || event.reason) : 'Unhandled promise rejection';
+            errorPanel.style.display = 'block';
+            console.error('Unhandled rejection:', event.reason);
+        });
+    </script>
+
+    <!-- Add polyfills for older mobile browsers -->
+    <script>
+        // crypto.randomUUID polyfill
+        if (!crypto.randomUUID) {
+            crypto.randomUUID = function() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            };
+        }
+        // Add other polyfills if needed (e.g., Promise, fetch)
+    </script>
+
+    <!-- Your app script -->
     <script type="module" src="/src/ui/pages/app.component.ts"></script>
 </body>
 </html>
