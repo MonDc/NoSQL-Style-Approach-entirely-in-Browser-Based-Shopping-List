@@ -8,19 +8,38 @@ import {
 } from '../../types/shopping-list.types';
 import { ListItemComponent, ListItemCallbacks } from './list-item.component';
 import { AddItemFormComponent, AddItemFormCallbacks } from './add-item-form.component';
+import { SwipeableGrid } from './swipeable-grid/swipeable-grid.component';
 
 /**
- * Main shopping list component
+ * Main shopping list component [Manages DOM element references to avoid repeated queries]
  * Orchestrates all UI interactions and data flow
  * UI Component for displaying and managing a shopping list  
  * Follows the Observer pattern to react to data changes
  */
+interface DOMElements {
+    listTitle: HTMLElement | null;
+    listSummary: HTMLElement | null;
+    itemsList: HTMLElement | null;
+    categoryProducts: HTMLElement | null;
+    searchInput: HTMLInputElement | null;
+    searchResults: HTMLElement | null;
+    itemCount: HTMLElement | null;
+    archiveBtn: HTMLElement | null;
+    clearBtn: HTMLElement | null;
+}
+
+/**
+ * Main shopping list component
+ * Orchestrates all UI interactions and data flow
+ * Follows the Observer pattern to react to data changes
+ */
 export class ShoppingListComponent {
+    // Core dependencies
     private container: HTMLElement;
     private service: ShoppingListService;
     private catalogRepo: CatalogRepository;
     
-    // State
+    // Application state
     private currentListId: UUID | null = null;
     private currentList: ShoppingList | null = null;
     private unsubscribe: (() => void) | null = null;
@@ -28,21 +47,31 @@ export class ShoppingListComponent {
     // Sub-components
     private listItemComponents: Map<UUID, ListItemComponent> = new Map();
     private addItemForm: AddItemFormComponent | null = null;
+    private swipeableGrid: SwipeableGrid | null = null;  // ← Add this!
     
     // DOM elements cache
-    private elements: {
-        listTitle?: HTMLElement;
-        listSummary?: HTMLElement;
-        itemsList?: HTMLElement;
-        popularItems?: HTMLElement;
-        categoryProducts?: HTMLElement;
-        searchInput?: HTMLInputElement;
-        searchResults?: HTMLElement;
-        itemCount?: HTMLElement;
-    } = {};
+    private elements: DOMElements = {
+        listTitle: null,
+        listSummary: null,
+        itemsList: null,
+        categoryProducts: null,
+        searchInput: null,
+        searchResults: null,
+        itemCount: null,
+        archiveBtn: null,
+        clearBtn: null
+    };
+
+    // Constants
+    private readonly USER_ID = 'demo-user';
+    private readonly DEBOUNCE_DELAY = 150;
 
     constructor(containerId: string) {
-        this.container = document.getElementById(containerId)!;
+        const container = document.getElementById(containerId);
+        if (!container) {
+            throw new Error(`Container element with id '${containerId}' not found`);
+        }
+        this.container = container;
         this.service = new ShoppingListService();
         this.catalogRepo = new CatalogRepository();
         
@@ -53,12 +82,17 @@ export class ShoppingListComponent {
      * Initialize the component
      */
     private async initialize(): Promise<void> {
-        await this.ensureDatabaseReady();
-        await this.ensureListExists();
-        this.render();
-        this.cacheElements();
-        this.setupEventListeners();
-        await this.loadInitialData();
+        try {
+            await this.ensureDatabaseReady();
+            await this.ensureListExists();
+            this.renderLayout();
+            this.cacheElements();
+            this.setupEventListeners();
+            await this.loadInitialData();
+        } catch (error) {
+            console.error('Failed to initialize shopping list component:', error);
+            this.showError('Failed to load shopping list. Please refresh the page.');
+        }
     }
 
     /**
@@ -70,7 +104,7 @@ export class ShoppingListComponent {
             console.log('✅ Database ready');
         } catch (error) {
             console.error('❌ Database initialization failed:', error);
-            this.showError('Failed to initialize database');
+            throw new Error('Database initialization failed');
         }
     }
 
@@ -78,7 +112,7 @@ export class ShoppingListComponent {
      * Create or get today's shopping list
      */
     private async ensureListExists(): Promise<void> {
-        const lists = await this.service.getUserLists('demo-user');
+        const lists = await this.service.getUserLists(this.USER_ID);
         
         if (lists.success && lists.data && lists.data.length > 0) {
             this.currentListId = lists.data[0].id;
@@ -86,7 +120,7 @@ export class ShoppingListComponent {
         } else {
             const newList = await this.service.createList(
                 `Shopping List ${new Date().toLocaleDateString()}`,
-                'demo-user'
+                this.USER_ID
             );
             
             if (newList.success && newList.data) {
@@ -97,74 +131,102 @@ export class ShoppingListComponent {
     }
 
     /**
-     * Render the main UI
+     * Render the main layout structure
      */
-    private render(): void {
+    private renderLayout(): void {
         this.container.innerHTML = `
             <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                <!-- Header -->
-                    <header style="margin-bottom: 20px;">
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 32px;">🛒</span>
-                            <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
-                        </div>
-                        <div class="list-summary" style="font-size: 14px; color: #666; margin-top: 8px; margin-left: 40px;"></div>
-                    </header>
-
-                <!-- Search -->
-                <section style="margin-bottom: 30px;">
-                    <h3 style="margin-bottom: 10px;">🔍 Search</h3>
-                    <input 
-                        type="text" 
-                        class="search-input" 
-                        placeholder="Search for items..." 
-                        style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;"
-                    />
-                    <div class="search-results" style="margin-top: 10px;"></div>
-                </section>
-
-                <!-- Featured Items (8 items) -->
-                <section style="margin-bottom: 30px;">
-                    <h3 style="margin-bottom: 10px;">⭐ Featured Items</h3>
-                    <div class="category-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;"></div>
-                </section>
-
-                <!-- Add Item Form (optional, you can keep or remove) -->
-                <div class="add-form-container" style="margin-bottom: 30px;"></div>
-
-                <!-- My List -->
-                <section style="margin-bottom: 30px;">
-                    <h3 style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                        <span>📝 My List</span>
-                        <span class="item-count" style="background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">0</span>
-                    </h3>
-                    <div class="items-list" style="background: #f9f9f9; border-radius: 8px; padding: 15px;"></div>
-                </section>
-
-                <!-- List Actions -->
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Archive List
-                    </button>
-                    <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                        Clear Completed
-                    </button>
-                </div>
+                ${this.renderHeader()}
+                ${this.renderSearchSection()}
+                ${this.renderFeaturedSection()}
+                ${this.renderAddFormContainer()}
+                ${this.renderListSection()}
+                ${this.renderActionsSection()}
             </div>
         `;
     }
 
     /**
-     * Render category buttons
+     * Render header section
      */
-    private renderCategoryButtons(): string {
-        const categories = ['Dairy', 'Produce', 'Meat', 'Bakery', 'Beverages', 'Snacks', 'Canned Goods', 'Household'];
-        return categories.map(cat => `
-            <button class="category-btn" data-category="${cat}"
-                style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
-                ${this.getCategoryEmoji(cat)} ${cat}
-            </button>
-        `).join('');
+    private renderHeader(): string {
+        return `
+            <header style="margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 32px;">🛒</span>
+                    <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
+                </div>
+                <div class="list-summary" style="font-size: 14px; color: #666; margin-top: 8px; margin-left: 40px;"></div>
+            </header>
+        `;
+    }
+
+    /**
+     * Render search section
+     */
+    private renderSearchSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <h3 style="margin-bottom: 10px;">🔍 Search</h3>
+                <input 
+                    type="text" 
+                    class="search-input" 
+                    placeholder="Search for items..." 
+                    style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+                />
+                <div class="search-results" style="margin-top: 10px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render featured items section
+     */
+    private renderFeaturedSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <h3 style="margin-bottom: 10px;">⭐ Featured Items</h3>
+                <div class="category-products" style="min-height: 200px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render add form container
+     */
+    private renderAddFormContainer(): string {
+        return `<div class="add-form-container" style="margin-bottom: 30px;"></div>`;
+    }
+
+    /**
+     * Render shopping list section
+     */
+    private renderListSection(): string {
+        return `
+            <section style="margin-bottom: 30px;">
+                <h3 style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                    <span>📝 My List</span>
+                    <span class="item-count" style="background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">0</span>
+                </h3>
+                <div class="items-list" style="background: #f9f9f9; border-radius: 8px; padding: 15px;"></div>
+            </section>
+        `;
+    }
+
+    /**
+     * Render action buttons section
+     */
+    private renderActionsSection(): string {
+        return `
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Archive List
+                </button>
+                <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    Clear Completed
+                </button>
+            </div>
+        `;
     }
 
     /**
@@ -172,14 +234,15 @@ export class ShoppingListComponent {
      */
     private cacheElements(): void {
         this.elements = {
-            listTitle: this.container.querySelector('.list-title') as HTMLElement,
-            listSummary: this.container.querySelector('.list-summary') as HTMLElement,
-            itemsList: this.container.querySelector('.items-list') as HTMLElement,
-            popularItems: this.container.querySelector('.popular-items') as HTMLElement,
-            categoryProducts: this.container.querySelector('.category-products') as HTMLElement,
-            searchInput: this.container.querySelector('.search-input') as HTMLInputElement,
-            searchResults: this.container.querySelector('.search-results') as HTMLElement,
-            itemCount: this.container.querySelector('.item-count') as HTMLElement
+            listTitle: this.container.querySelector('.list-title'),
+            listSummary: this.container.querySelector('.list-summary'),
+            itemsList: this.container.querySelector('.items-list'),
+            categoryProducts: this.container.querySelector('.category-products'),
+            searchInput: this.container.querySelector('.search-input'),
+            searchResults: this.container.querySelector('.search-results'),
+            itemCount: this.container.querySelector('.item-count'),
+            archiveBtn: this.container.querySelector('.archive-list'),
+            clearBtn: this.container.querySelector('.clear-completed')
         };
     }
 
@@ -187,48 +250,82 @@ export class ShoppingListComponent {
      * Setup global event listeners
      */
     private setupEventListeners(): void {
-        // Category tabs
-        this.container.querySelectorAll('.category-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const target = e.target as HTMLElement;
-                this.container.querySelectorAll('.category-btn').forEach(b => {
-                    (b as HTMLElement).style.background = '#f0f0f0';
-                    (b as HTMLElement).style.color = '#000';
-                });
-                target.style.background = '#4CAF50';
-                target.style.color = 'white';
-                
-                const category = target.getAttribute('data-category');
-                await this.loadCategoryProducts(category);
-            });
-        });
-
-        // Search input with debounce
-        let timeout: NodeJS.Timeout;
+        // Search with debounce
+        let timeout: number;
         this.elements.searchInput?.addEventListener('input', () => {
             clearTimeout(timeout);
-            timeout = setTimeout(() => this.handleSearch(), 150); // Changed from 300ms to 150ms
+            timeout = window.setTimeout(() => this.handleSearch(), this.DEBOUNCE_DELAY);
         });
 
-        // List actions
-        this.container.querySelector('.archive-list')?.addEventListener('click', () => this.archiveList());
-        this.container.querySelector('.clear-completed')?.addEventListener('click', () => this.clearCompleted());
+        // Action buttons
+        this.elements.archiveBtn?.addEventListener('click', () => this.archiveList());
+        this.elements.clearBtn?.addEventListener('click', () => this.clearCompleted());
     }
 
     /**
      * Load all initial data
      */
-    private async loadInitialData(): Promise<void> {
-        await Promise.all([
-            this.loadListData(),
-            this.loadPopularItems(),
-            this.loadCategoryProducts('all')
-        ]);
-        
-        this.initAddItemForm();
-        this.subscribeToListUpdates();
-    }
+private async loadInitialData(): Promise<void> {
+    await Promise.all([
+        this.loadListData(),
+        this.initializeSwipeableGrid()
+    ]);
+    
+    this.initAddItemForm();
+    this.subscribeToListUpdates();
+}
 
+    /**
+     * Initialize the product carousel with all products
+     */
+private async initializeSwipeableGrid(): Promise<void> {
+    if (!this.elements.categoryProducts) return;
+    
+    try {
+        const result = await this.catalogRepo.findAll();
+        
+        if (result.success && result.data) {
+            this.swipeableGrid = new SwipeableGrid(
+                result.data,
+                {
+                    onItemClick: (product) => this.addCatalogItem(product.id, product.name),
+                    onPageChange: (page) => console.log('Swiped to page:', page + 1)
+                },
+                {
+                    rows: 2,
+                    columns: 2,
+                    itemsPerPage: 4,
+                    showDots: true,
+                    infinite: true,
+                    swipeThreshold: 50
+                }
+            );
+            
+            this.elements.categoryProducts.innerHTML = '';
+            this.elements.categoryProducts.appendChild(this.swipeableGrid.getElement());
+        }
+    } catch (error) {
+        console.error('Error initializing swipeable grid:', error);
+        this.showGridError();
+    }
+}
+
+private showGridError(): void {
+    if (this.elements.categoryProducts) {
+        this.elements.categoryProducts.innerHTML = `
+            <div style="
+                text-align: center;
+                padding: 40px;
+                color: #999;
+                background: #f9f9f9;
+                border-radius: 12px;
+            ">
+                <span style="font-size: 32px; display: block; margin-bottom: 8px;">😕</span>
+                Failed to load items
+            </div>
+        `;
+    }
+}
     /**
      * Load current list data
      */
@@ -248,11 +345,9 @@ export class ShoppingListComponent {
     private updateListUI(): void {
         if (!this.currentList) return;
         
-        // Update title
+        // Update title (empty since we only show icon)
         if (this.elements.listTitle) {
-            //this.elements.listTitle.textContent = this.currentList.name;
-                // Remove the date part - just show the list name without "Shopping List" text
-            this.elements.listTitle.textContent = ''; // Empty, since we only want the icon
+            this.elements.listTitle.textContent = '';
         }
         
         // Update item count
@@ -299,7 +394,7 @@ export class ShoppingListComponent {
             },
             onEdit: (itemId: UUID) => {
                 console.log('Edit item:', itemId);
-                // Implement edit functionality
+                // TODO: Implement edit functionality
             },
             onDelete: async (itemId: UUID) => {
                 if (!this.currentListId) return;
@@ -325,218 +420,151 @@ export class ShoppingListComponent {
     }
 
     /**
-     * Load popular items
+     * Handle search input
      */
-    private async loadPopularItems(): Promise<void> {
-        if (!this.elements.popularItems) return;
+    private async handleSearch(): Promise<void> {
+        const query = this.elements.searchInput?.value.trim() || '';
         
-        const result = await this.service.getPopularProducts();
+        if (!this.elements.searchResults) return;
         
-        if (result.success && result.data) {
-            this.elements.popularItems.innerHTML = result.data.map(product => `
-                <button class="add-popular" data-product-id="${product.id}" data-product-name="${product.name}"
-                    style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer;">
-                    ➕ ${product.name}
-                </button>
-            `).join('');
-            
-            this.elements.popularItems.querySelectorAll('.add-popular').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const target = e.target as HTMLElement;
-                    const productId = target.getAttribute('data-product-id');
-                    const productName = target.getAttribute('data-product-name');
-                    if (productId && productName) {
-                        this.addCatalogItem(productId, productName);
-                    }
-                });
-            });
+        if (query.length < 1) {
+            this.elements.searchResults.innerHTML = '';
+            return;
+        }
+        
+        this.showSearchLoading();
+        
+        const results = await this.service.searchProducts(query);
+        
+        if (results.success && results.data) {
+            this.renderSearchResults(results.data);
         }
     }
 
     /**
-     * Load products by category
+     * Show loading state in search results
      */
-    private async loadCategoryProducts(category: string | null): Promise<void> {
-        if (!this.elements.categoryProducts) return;
-        
-        this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">Loading...</div>';
-        
-        try {
-            let result;
-            if (category === 'all' || !category) {
-                result = await this.catalogRepo.findAll();
-            } else {
-                result = await this.catalogRepo.getByCategory(category);
-            }
-            
-            if (!result.success || !result.data) {
-                this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
-                return;
-            }
-            
-            const products = result.data;
-            
-            if (products.length === 0) {
-                this.elements.categoryProducts.innerHTML = `
-                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999;">
-                        <div style="font-size: 48px;">🔍</div>
-                        <div>No products in this category</div>
-                    </div>
-                `;
-                return;
-            }
-            
-            // Generate HTML
-            this.elements.categoryProducts.innerHTML = products.map(product => {
-                const emoji = this.getProductEmoji(product);
-                return `
-                    <button class="add-category-item" data-product-id="${product.id}" data-product-name="${product.name}"
-                        style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s;">
-                        <div style="font-size: 32px; margin-bottom: 8px;">${emoji}</div>
-                        <div style="font-weight: bold; font-size: 14px;">${product.name}</div>
-                        <div style="font-size: 11px; color: #666; margin-top: 4px;">${product.category || ''}</div>
-                    </button>
-                `;
-            }).join('');
-            
-            // FIX: Re-attach event listeners to the new buttons
-            const buttons = this.elements.categoryProducts.querySelectorAll('.add-category-item');
-            console.log(`🔘 Attaching ${buttons.length} event listeners`); // Debug log
-            
-            buttons.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault(); // Prevent any default behavior
-                    e.stopPropagation(); // Stop event bubbling
-                    
-                    const target = e.currentTarget as HTMLElement;
-                    const productId = target.getAttribute('data-product-id');
-                    const productName = target.getAttribute('data-product-name');
-                    
-                    console.log(`👆 Clicked: ${productName} (${productId})`); // Debug log
-                    
-                    if (productId && productName) {
-                        this.addCatalogItem(productId, productName).catch(error => {
-                            console.error('Error adding item:', error);
-                            alert('Failed to add item. Please try again.');
-                        });
-                    }
-                });
-                
-                // Add hover effects via JS (optional)
-                btn.addEventListener('mouseenter', () => {
-                    (btn as HTMLElement).style.transform = 'scale(1.05)';
-                    (btn as HTMLElement).style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
-                });
-                
-                btn.addEventListener('mouseleave', () => {
-                    (btn as HTMLElement).style.transform = 'scale(1)';
-                    (btn as HTMLElement).style.boxShadow = 'none';
-                });
-            });
-            
-        } catch (error) {
-            console.error('❌ Error loading category products:', error);
-            this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
+    private showSearchLoading(): void {
+        if (this.elements.searchResults) {
+            this.elements.searchResults.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #666;">
+                    Searching...
+                </div>
+            `;
         }
     }
-    
-/**
- * Handle search input
- */
-private async handleSearch(): Promise<void> {
-    const query = this.elements.searchInput?.value.trim() || '';
-    
-    if (!this.elements.searchResults) return;
-    
-    // CHANGE THIS: Show results from first character, not second
-    if (query.length < 1) {  // Changed from 2 to 1
-        this.elements.searchResults.innerHTML = '';
-        return;
-    }
-    
-    this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Searching...</div>';
-    
-    const results = await this.service.searchProducts(query);
-    
-    if (results.success && results.data) {
-        if (results.data.length === 0) {
-            this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No products found</div>';
+
+    /**
+     * Render search results
+     */
+    private renderSearchResults(products: CatalogProduct[]): void {
+        if (!this.elements.searchResults) return;
+        
+        if (products.length === 0) {
+            this.elements.searchResults.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #999;">
+                    No products found
+                </div>
+            `;
             return;
         }
         
-        this.elements.searchResults.innerHTML = results.data.map(product => `
+        this.elements.searchResults.innerHTML = products.map(product => `
             <div style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
                 <div>
                     <strong style="font-size: 16px;">${product.name}</strong>
                     <span style="color: #666; margin-left: 8px; font-size: 12px; background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">
-                        ${product.category}
+                        ${product.category || 'Uncategorized'}
                     </span>
                 </div>
-                <button class="add-search-btn" data-product-id="${product.id}" data-product-name="${product.name}"
+                <button class="add-search-btn" 
+                    data-product-id="${product.id}" 
+                    data-product-name="${product.name}"
                     style="background: #4CAF50; color: white; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;">
                     Add
                 </button>
             </div>
         `).join('');
         
-        // Add click handlers (same as before)
         this.attachSearchButtonHandlers();
     }
-}
 
-/**
- * Attach handlers to search buttons
- */
-private attachSearchButtonHandlers(): void {
-    this.elements.searchResults?.querySelectorAll('.add-search-btn').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            const button = e.currentTarget as HTMLButtonElement;
-            const productId = button.getAttribute('data-product-id');
-            const productName = button.getAttribute('data-product-name');
-            const resultDiv = button.closest('div');
+    /**
+     * Attach handlers to search buttons
+     */
+    private attachSearchButtonHandlers(): void {
+        this.elements.searchResults?.querySelectorAll('.add-search-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                const button = e.currentTarget as HTMLButtonElement;
+                const productId = button.getAttribute('data-product-id');
+                const productName = button.getAttribute('data-product-name');
+                const resultDiv = button.closest('div');
+                
+                if (!productId || !productName) return;
+                
+                await this.addSearchItemWithFeedback(button, resultDiv, productId, productName);
+            });
+        });
+    }
+
+    /**
+     * Add search item with visual feedback
+     */
+    private async addSearchItemWithFeedback(
+        button: HTMLButtonElement, 
+        resultDiv: Element | null, 
+        productId: string, 
+        productName: string
+    ): Promise<void> {
+        try {
+            if (resultDiv) {
+                (resultDiv as HTMLElement).style.transition = 'all 0.3s';
+                (resultDiv as HTMLElement).style.opacity = '0.5';
+            }
             
-            if (!productId || !productName) return;
+            button.disabled = true;
+            button.textContent = '✓ Adding...';
             
-            try {
-                if (resultDiv) {
-                    (resultDiv as HTMLElement).style.transition = 'all 0.3s';
-                    (resultDiv as HTMLElement).style.opacity = '0.5';
-                }
-                
-                button.disabled = true;
-                button.textContent = '✓ Adding...';
-                
-                await this.addCatalogItem(productId, productName);
-                
-                if (resultDiv) {
-                    (resultDiv as HTMLElement).style.opacity = '0';
-                    (resultDiv as HTMLElement).style.transform = 'translateX(20px)';
-                    
-                    setTimeout(() => {
-                        resultDiv.remove();
-                        if (this.elements.searchResults?.children.length === 0) {
-                            this.elements.searchResults.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No more results</div>';
-                        }
-                    }, 300);
-                }
-                
-            } catch (error) {
-                console.error('Error adding item:', error);
-                button.textContent = '✗ Failed';
-                button.style.background = '#f44336';
+            await this.addCatalogItem(productId, productName);
+            
+            if (resultDiv) {
+                (resultDiv as HTMLElement).style.opacity = '0';
+                (resultDiv as HTMLElement).style.transform = 'translateX(20px)';
                 
                 setTimeout(() => {
-                    button.disabled = false;
-                    button.style.background = '#4CAF50';
-                    button.textContent = 'Add';
-                    if (resultDiv) {
-                        (resultDiv as HTMLElement).style.opacity = '1';
-                    }
-                }, 2000);
+                    resultDiv.remove();
+                    this.checkEmptySearchResults();
+                }, 300);
             }
-        });
-    });
-}
+            
+        } catch (error) {
+            console.error('Error adding item:', error);
+            button.textContent = '✗ Failed';
+            button.style.background = '#f44336';
+            
+            setTimeout(() => {
+                button.disabled = false;
+                button.style.background = '#4CAF50';
+                button.textContent = 'Add';
+                if (resultDiv) {
+                    (resultDiv as HTMLElement).style.opacity = '1';
+                }
+            }, 2000);
+        }
+    }
+
+    /**
+     * Check if search results are empty and show appropriate message
+     */
+    private checkEmptySearchResults(): void {
+        if (this.elements.searchResults?.children.length === 0) {
+            this.elements.searchResults.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #999;">
+                    No more results
+                </div>
+            `;
+        }
+    }
 
     /**
      * Initialize the add item form
@@ -556,15 +584,6 @@ private attachSearchButtonHandlers(): void {
         container.appendChild(this.addItemForm.getElement());
     }
 
-    // /**
-    //  * Toggle item status (complete/incomplete)
-    //  */
-    // private async toggleItem(itemId: UUID): Promise<void> {
-    //     if (!this.currentListId) return;
-    //     await this.service.toggleItemStatus(this.currentListId, itemId);
-    // }
-
-
     /**
      * Add item from catalog to list
      */
@@ -575,8 +594,6 @@ private attachSearchButtonHandlers(): void {
         }
         
         try {
-            console.log(`➕ Adding ${productName} to list...`);
-            
             await this.service.addItem(this.currentListId, {
                 name: productName,
                 quantity: 1,
@@ -584,28 +601,28 @@ private attachSearchButtonHandlers(): void {
                 category: 'Groceries'
             });
             
-            // ✅ SHOW FEEDBACK - Find the clicked button
-            const buttons = document.querySelectorAll(`[data-product-id="${productId}"]`);
-            buttons.forEach(btn => {
-                const originalHTML = btn.innerHTML;
-                //const originalText = btn.textContent;
-                
-                // Save original for restoration
-                (btn as any)._originalHTML = originalHTML;
-                
-                // Change to success message
-                btn.innerHTML = '✅ Added!';
-                
-                // Restore after 1 second
-                setTimeout(() => {
-                    btn.innerHTML = (btn as any)._originalHTML || originalHTML;
-                }, 1000);
-            });
+            this.showAddFeedback(productId);
             
         } catch (error) {
             console.error('❌ Error adding item:', error);
             alert(`Failed to add ${productName}. Please try again.`);
         }
+    }
+
+    /**
+     * Show feedback when item is added
+     */
+    private showAddFeedback(productId: string): void {
+        const buttons = document.querySelectorAll(`[data-product-id="${productId}"]`);
+        buttons.forEach(btn => {
+            const originalHTML = btn.innerHTML;
+            (btn as any)._originalHTML = originalHTML;
+            btn.innerHTML = '✅ Added!';
+            
+            setTimeout(() => {
+                btn.innerHTML = (btn as any)._originalHTML || originalHTML;
+            }, 1000);
+        });
     }
 
     /**
@@ -628,7 +645,7 @@ private attachSearchButtonHandlers(): void {
         
         if (confirm('Archive this list?')) {
             await this.service.archiveList(this.currentListId);
-            // Optionally create new list or redirect
+            // TODO: Handle post-archive (create new list, redirect, etc.)
         }
     }
 
@@ -637,9 +654,16 @@ private attachSearchButtonHandlers(): void {
      */
     private async clearCompleted(): Promise<void> {
         if (!this.currentListId) return;
-        const result = await this.service.clearCompleted(this.currentListId);
-        if (result.success && result.data) {
-            console.log(`✅ Cleared completed items`);
+        
+        const completedCount = this.currentList?.items.filter(i => i.status === 'completed').length || 0;
+        
+        if (completedCount === 0) {
+            alert('No completed items to clear');
+            return;
+        }
+        
+        if (confirm(`Clear ${completedCount} completed item${completedCount > 1 ? 's' : ''}?`)) {
+            await this.service.clearCompleted(this.currentListId);
         }
     }
 
@@ -651,9 +675,10 @@ private attachSearchButtonHandlers(): void {
         errorDiv.style.cssText = `
             background: #ff4444;
             color: white;
-            padding: 10px;
+            padding: 12px;
             border-radius: 4px;
             margin-bottom: 10px;
+            text-align: center;
         `;
         errorDiv.textContent = message;
         this.container.prepend(errorDiv);
@@ -661,125 +686,25 @@ private attachSearchButtonHandlers(): void {
         setTimeout(() => errorDiv.remove(), 5000);
     }
 
-    /**
-     * Get emoji for category
-     */
-    private getCategoryEmoji(category: string): string {
-        const emojis: Record<string, string> = {
-            'Dairy': '🥛',
-            'Produce': '🥬',
-            'Meat': '🥩',
-            'Bakery': '🍞',
-            'Beverages': '☕',
-            'Snacks': '🍫',
-            'Canned Goods': '🥫',
-            'Household': '🧻',
-            'Pantry': '🍚'
-        };
-        return emojis[category] || '📦';
+/**
+ * Clean up resources
+ */
+public destroy(): void {
+    if (this.unsubscribe) {
+        this.unsubscribe();
     }
-
-    /**
-     * Get specific emoji for each product
-     * @param product - The product object
-     * @returns Emoji string
-     */
-    private getProductEmoji(product: CatalogProduct): string {
-        // Product-specific icons
-        const productIcons: Record<string, string> = {
-            // Dairy
-            'Eggs': '🥚',
-            'Cheese': '🧀',
-            'Butter': '🧈',
-            'Yogurt': '🥄',
-            
-            // Produce
-            'Apples': '🍎',
-            'Bananas': '🍌',
-            'Tomatoes': '🍅',
-            'Potatoes': '🥔',
-            'Onions': '🧅',
-            'Lettuce': '🥬',
-            'Carrots': '🥕',
-            'Cucumber': '🥒',
-            'Broccoli': '🥦',
-            'Garlic': '🧄',
-            'Peppers': '🫑',
-            'Corn': '🌽',
-            'Mushrooms': '🍄',
-            
-            // Meat & Seafood
-            'Chicken Breast': '🍗',
-            'Ground Beef': '🥩',
-            'Salmon': '🐟',
-            'Shrimp': '🦐',
-            'Bacon': '🥓',
-            'Turkey': '🦃',
-            
-            // Bakery
-            'Bread': '🍞',
-            'Bagels': '🥯',
-            'Croissant': '🥐',
-            'Muffins': '🧁',
-            'Cookies': '🍪',
-            
-            // Beverages
-            'Coffee': '☕',
-            'Orange Juice': '🧃',
-            'Milk': '🥛',
-            'Soda': '🥤',
-            'Water': '💧',
-            'Beer': '🍺',
-            'Wine': '🍷',
-            
-            // Snacks
-            'Chocolate': '🍫',
-            'Chips': '🥨',
-            'Candy': '🍬',
-            'Ice Cream': '🍦',
-            'Popcorn': '🍿',
-            'Nuts': '🥜',
-            
-            // Canned Goods
-            'Canned Tuna': '🐟',
-            'Canned Beans': '🥫',
-            'Soup': '🍲',
-            
-            // Pantry
-            'Rice': '🍚',
-            'Pasta': '🍝',
-            'Olive Oil': '🫒',
-            'Flour': '🌾',
-            'Sugar': '🧂',
-            'Salt': '🧂',
-            'Spices': '🌶️',
-            
-            // Household
-            'Paper Towels': '🧻',
-            'Toilet Paper': '🧻',
-            'Soap': '🧼',
-            'Detergent': '🧴',
-            'Trash Bags': '🗑️'
-        };
-        
-        // Return product-specific icon or fallback to category icon
-        return productIcons[product.name] || this.getCategoryEmoji(product.category);
+    
+    this.listItemComponents.clear();
+    
+    if (this.addItemForm) {
+        this.addItemForm.destroy();
     }
-
-    /**
-     * Clean up resources
-     */
-    public destroy(): void {
-        if (this.unsubscribe) {
-            this.unsubscribe();
-        }
-        
-        this.listItemComponents.clear();
-        
-        if (this.addItemForm) {
-            this.addItemForm.destroy();
-        }
-        
-        this.container.innerHTML = '';
+    
+    // Add this line to clean up the swipeable grid
+    if (this.swipeableGrid) {
+        this.swipeableGrid.destroy();
     }
+    
+    this.container.innerHTML = '';
+}
 }
