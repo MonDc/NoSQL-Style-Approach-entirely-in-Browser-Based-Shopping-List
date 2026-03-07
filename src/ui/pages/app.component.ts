@@ -88,6 +88,40 @@ async function renderUI() {
                 <span style="font-size: 14px; color: #666;">(Today)</span>
             </h1>
             
+            <!-- Category Tabs -->
+            <div style="margin: 20px 0;">
+                <div style="display: flex; gap: 10px; overflow-x: auto; padding: 5px 0;">
+                    <button class="category-btn active" data-category="all" 
+                        style="padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 20px; cursor: pointer;">
+                        All
+                    </button>
+                    <button class="category-btn" data-category="Dairy"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        🥛 Dairy
+                    </button>
+                    <button class="category-btn" data-category="Produce"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        🥬 Produce
+                    </button>
+                    <button class="category-btn" data-category="Meat"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        🥩 Meat
+                    </button>
+                    <button class="category-btn" data-category="Bakery"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        🍞 Bakery
+                    </button>
+                    <button class="category-btn" data-category="Beverages"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        ☕ Beverages
+                    </button>
+                    <button class="category-btn" data-category="Snacks"
+                        style="padding: 8px 16px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 20px; cursor: pointer;">
+                        🍫 Snacks
+                    </button>
+                </div>
+            </div>
+            
             <!-- Popular Items -->
             <div style="margin: 30px 0;">
                 <h3 style="margin-bottom: 10px;">🔥 Popular Items</h3>
@@ -102,10 +136,18 @@ async function renderUI() {
                 <input 
                     type="text" 
                     id="search-input" 
-                    placeholder="Type to search (e.g., 'milk', 'cheese', 'bread')..." 
+                    placeholder="Type to search..." 
                     style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px;"
                 />
                 <div id="search-results" style="margin-top: 10px;"></div>
+            </div>
+            
+            <!-- Category Products -->
+            <div style="margin: 30px 0;">
+                <h3 style="margin-bottom: 10px;">📦 Products by Category</h3>
+                <div id="category-products" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px;">
+                    Loading...
+                </div>
             </div>
             
             <!-- My List -->
@@ -114,9 +156,7 @@ async function renderUI() {
                     <span>📝 My List</span>
                     <span id="item-count" style="background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">0</span>
                 </h3>
-                <div id="my-list" style="background: #f9f9f9; border-radius: 8px; padding: 15px;">
-                    <p style="color: #999; text-align: center;">No items yet. Add some from above!</p>
-                </div>
+                <div id="my-list" style="background: #f9f9f9; border-radius: 8px; padding: 15px;"></div>
             </div>
         </div>
     `;
@@ -129,6 +169,108 @@ async function renderUI() {
     
     // Setup search
     setupSearch();
+    
+    // Setup category tabs
+    setupCategoryTabs();
+    
+    // Load initial category (All)
+    await loadCategoryProducts('all');
+}
+
+// Add this new function
+async function setupCategoryTabs() {
+    const categoryBtns = document.querySelectorAll('.category-btn');
+    
+    categoryBtns.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            // Remove active class from all
+            categoryBtns.forEach(b => {
+                (b as HTMLElement).style.background = '#f0f0f0';
+                (b as HTMLElement).style.color = '#000';
+            });
+            
+            // Add active class to clicked
+            (btn as HTMLElement).style.background = '#4CAF50';
+            (btn as HTMLElement).style.color = 'white';
+            
+            const category = btn.getAttribute('data-category');
+            await loadCategoryProducts(category);
+        });
+    });
+}
+
+// Add this new function
+async function loadCategoryProducts(category: string | null) {
+    const container = document.getElementById('category-products');
+    if (!container) return;
+    
+    container.innerHTML = '<div style="grid-column: 1/-1; text-align: center;">Loading...</div>';
+    
+    try {
+        const catalogRepo = new CatalogRepository();
+        
+        let result;
+        if (category === 'all' || !category) {
+            result = await catalogRepo.findAll();
+        } else {
+            result = await catalogRepo.getByCategory(category);
+        }
+        
+        if (!result.success) {
+            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
+            return;
+        }
+        
+        const products = result.data || [];
+        
+        if (products.length === 0) {
+            container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999;">No products in this category</div>';
+            return;
+        }
+        
+        container.innerHTML = products.map(product => `
+            <button 
+                class="add-category-item" 
+                data-product-id="${product.id}"
+                data-product-name="${product.name}"
+                style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05);"
+            >
+                <div style="font-size: 24px; margin-bottom: 5px;">
+                    ${getProductEmoji(product.category)}
+                </div>
+                <div style="font-weight: bold;">${product.name}</div>
+                <div style="font-size: 12px; color: #666;">${product.category}</div>
+            </button>
+        `).join('');
+        
+        container.querySelectorAll('.add-category-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const productId = btn.getAttribute('data-product-id');
+                const productName = btn.getAttribute('data-product-name');
+                if (productId) addToMyList(productId, productName!);
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error loading category products:', error);
+        container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
+    }
+}
+
+// Helper function for emojis
+function getProductEmoji(category: string): string {
+    const emojis: Record<string, string> = {
+        'Dairy': '🥛',
+        'Produce': '🥬',
+        'Meat': '🥩',
+        'Bakery': '🍞',
+        'Beverages': '☕',
+        'Snacks': '🍫',
+        'Canned Goods': '🥫',
+        'Household': '🧻',
+        'Pantry': '🍚'
+    };
+    return emojis[category] || '📦';
 }
 
 async function loadPopularItems() {

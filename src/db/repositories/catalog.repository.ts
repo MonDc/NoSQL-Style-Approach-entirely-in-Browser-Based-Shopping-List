@@ -59,10 +59,7 @@ export class CatalogRepository extends BaseRepository<CatalogProduct, ShoppingLi
      */
     public async getByCategory(category: string): Promise<OperationResult<CatalogProduct[]>> {
         try {
-            const db = await this.getDb();
-            const index = db.transaction(this.storeName).store.index('by-category');
-            const products = await index.getAll(category);
-
+            const products = await this.queryStringIndex('by-category', category);
             return {
                 success: true,
                 data: products
