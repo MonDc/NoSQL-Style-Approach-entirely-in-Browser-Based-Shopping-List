@@ -222,6 +222,81 @@ private createTrack(): HTMLElement {
         this.track.style.transform = `translateX(${newTransform}%)`;
     }
 
+/**
+ * Update the grid with new product order
+ */
+public updateProducts(newProducts: CatalogProduct[]): void {
+    this.products = newProducts;
+    const itemsPerPage = this.config.dimensions.rows * this.config.dimensions.columns;
+    this.state.totalPages = Math.ceil(newProducts.length / itemsPerPage);
+    this.state.currentPage = 0;
+    
+    // Store the parent container
+    const parentContainer = this.track.parentElement;
+    
+    if (!parentContainer) return;
+    
+    // Create new track
+    const newTrack = document.createElement('div');
+    newTrack.style.cssText = this.track.style.cssText;
+    
+    // Create all pages for the new track
+    for (let i = 0; i < this.state.totalPages; i++) {
+        const page = PageFactory.createPage(
+            this.products,
+            i,
+            {
+                dimensions: this.config.dimensions,
+                styling: this.getCompleteStyling(),
+                onProductClick: (product) => this.callbacks.onItemClick(product)
+            }
+        );
+        newTrack.appendChild(page);
+    }
+    
+    // Replace old track with new one
+    parentContainer.replaceChild(newTrack, this.track);
+    this.track = newTrack;
+    
+    // Re-attach touch events to new track
+    this.attachTrackEvents();
+    
+    // Update dots
+    if (this.dotsIndicator) {
+        this.dotsIndicator.setActivePage(0);
+    }
+}
+
+/**
+ * Get complete styling object with defaults
+ */
+private getCompleteStyling(): Required<GridStyling> {
+    return {
+        cardBackground: this.config.styling.cardBackground || '#ffffff',
+        cardBorder: this.config.styling.cardBorder || '1px solid #e0e0e0',
+        cardShadow: this.config.styling.cardShadow || '0 2px 8px rgba(0,0,0,0.05)',
+        cardPadding: this.config.styling.cardPadding || '20px 12px',
+        cardBorderRadius: this.config.styling.cardBorderRadius || '16px',
+        cardHoverScale: this.config.styling.cardHoverScale || 1.02,
+        cardTapScale: this.config.styling.cardTapScale || 0.96,
+        emojiSize: this.config.styling.emojiSize || '42px',
+        nameFontSize: this.config.styling.nameFontSize || '15px',
+        categoryFontSize: this.config.styling.categoryFontSize || '12px',
+        dotActiveColor: this.config.styling.dotActiveColor || '#4CAF50',
+        dotInactiveColor: this.config.styling.dotInactiveColor || '#ccc'
+    };
+}
+
+/**
+ * Attach touch events to track
+ */
+private attachTrackEvents(): void {
+    this.track.addEventListener('touchstart', this.handleTouchStart.bind(this));
+    this.track.addEventListener('touchmove', this.handleTouchMove.bind(this));
+    this.track.addEventListener('touchend', this.handleTouchEnd.bind(this));
+    this.track.addEventListener('dragstart', (e) => e.preventDefault());
+}
+
     private goToPage(page: number): void {
         let newPage = page;
 

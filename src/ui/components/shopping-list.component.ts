@@ -7,7 +7,7 @@ import {
     CatalogProduct 
 } from '../../types/shopping-list.types';
 import { ListItemComponent, ListItemCallbacks } from './list-item.component';
-import { AddItemFormComponent, AddItemFormCallbacks } from './add-item-form.component';
+import { AddItemFormComponent } from './add-item-form.component';
 import { SwipeableGrid } from './swipeable-grid/swipeable-grid.component';
 
 /**
@@ -279,21 +279,28 @@ private renderActionsSection(): string {
         };
     }
 
-    /**
-     * Setup global event listeners
-     */
-    private setupEventListeners(): void {
-        // Search with debounce
-        let timeout: number;
-        this.elements.searchInput?.addEventListener('input', () => {
-            clearTimeout(timeout);
-            timeout = window.setTimeout(() => this.handleSearch(), this.DEBOUNCE_DELAY);
-        });
+/**
+ * Setup global event listeners
+ */
+private setupEventListeners(): void {
+    // Search with debounce - REPLACE YOUR EXISTING SEARCH CODE WITH THIS
+    let timeout: number;
+    this.elements.searchInput?.addEventListener('input', (e) => {
+        clearTimeout(timeout);
+        timeout = window.setTimeout(() => {
+            const query = (e.target as HTMLInputElement).value;
+            if (query.length === 0) {
+                this.clearSearch(); // Restore original order when empty
+            } else {
+                this.handleSearch();
+            }
+        }, this.DEBOUNCE_DELAY);
+    });
 
-        // Action buttons
-        this.elements.archiveBtn?.addEventListener('click', () => this.archiveList());
-        this.elements.clearBtn?.addEventListener('click', () => this.clearCompleted());
-    }
+    // Action buttons
+    this.elements.archiveBtn?.addEventListener('click', () => this.archiveList());
+    this.elements.clearBtn?.addEventListener('click', () => this.clearCompleted());
+}
 
     /**
      * Load all initial data
@@ -400,170 +407,76 @@ private renderActionsSection(): string {
         }
     }
 
-    /**
-     * Handle search input
-     */
-    private async handleSearch(): Promise<void> {
-        const query = this.elements.searchInput?.value.trim() || '';
+/**
+ * Handle search input - reorder grid items instead of showing list
+ */
+private async handleSearch(): Promise<void> {
+    const query = this.elements.searchInput?.value.trim().toLowerCase() || '';
+    
+    if (!this.swipeableGrid) return;
+    
+    try {
+        // Get all products
+        const result = await this.catalogRepo.findAll();
         
-        if (!this.elements.searchResults) return;
-        
-        if (query.length < 1) {
-            this.elements.searchResults.innerHTML = '';
-            return;
-        }
-        
-        this.showSearchLoading();
-        
-        const results = await this.service.searchProducts(query);
-        
-        if (results.success && results.data) {
-            this.renderSearchResults(results.data);
-        }
-    }
-
-    /**
-     * Show loading state in search results
-     */
-    private showSearchLoading(): void {
-        if (this.elements.searchResults) {
-            this.elements.searchResults.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #666;">
-                    Searching...
-                </div>
-            `;
-        }
-    }
-
-    /**
-     * Render search results
-     */
-    private renderSearchResults(products: CatalogProduct[]): void {
-        if (!this.elements.searchResults) return;
-        
-        if (products.length === 0) {
-            this.elements.searchResults.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #999;">
-                    No products found
-                </div>
-            `;
-            return;
-        }
-        
-        this.elements.searchResults.innerHTML = products.map(product => `
-            <div style="padding: 12px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <strong style="font-size: 16px;">${product.name}</strong>
-                    <span style="color: #666; margin-left: 8px; font-size: 12px; background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">
-                        ${product.category || 'Uncategorized'}
-                    </span>
-                </div>
-                <button class="add-search-btn" 
-                    data-product-id="${product.id}" 
-                    data-product-name="${product.name}"
-                    style="background: #4CAF50; color: white; border: none; padding: 6px 16px; border-radius: 20px; cursor: pointer; font-size: 14px;">
-                    Add
-                </button>
-            </div>
-        `).join('');
-        
-        this.attachSearchButtonHandlers();
-    }
-
-    /**
-     * Attach handlers to search buttons
-     */
-    private attachSearchButtonHandlers(): void {
-        this.elements.searchResults?.querySelectorAll('.add-search-btn').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const button = e.currentTarget as HTMLButtonElement;
-                const productId = button.getAttribute('data-product-id');
-                const productName = button.getAttribute('data-product-name');
-                const resultDiv = button.closest('div');
-                
-                if (!productId || !productName) return;
-                
-                await this.addSearchItemWithFeedback(button, resultDiv, productId, productName);
-            });
-        });
-    }
-
-    /**
-     * Add search item with visual feedback
-     */
-    private async addSearchItemWithFeedback(
-        button: HTMLButtonElement, 
-        resultDiv: Element | null, 
-        productId: string, 
-        productName: string
-    ): Promise<void> {
-        try {
-            if (resultDiv) {
-                (resultDiv as HTMLElement).style.transition = 'all 0.3s';
-                (resultDiv as HTMLElement).style.opacity = '0.5';
-            }
+        if (result.success && result.data) {
+            // Split into matching and non-matching
+            const matching: CatalogProduct[] = [];
+            const nonMatching: CatalogProduct[] = [];
             
-            button.disabled = true;
-            button.textContent = '✓ Adding...';
-            
-            await this.addCatalogItem(productId, productName);
-            
-            if (resultDiv) {
-                (resultDiv as HTMLElement).style.opacity = '0';
-                (resultDiv as HTMLElement).style.transform = 'translateX(20px)';
-                
-                setTimeout(() => {
-                    resultDiv.remove();
-                    this.checkEmptySearchResults();
-                }, 300);
-            }
-            
-        } catch (error) {
-            console.error('Error adding item:', error);
-            button.textContent = '✗ Failed';
-            button.style.background = '#f44336';
-            
-            setTimeout(() => {
-                button.disabled = false;
-                button.style.background = '#4CAF50';
-                button.textContent = 'Add';
-                if (resultDiv) {
-                    (resultDiv as HTMLElement).style.opacity = '1';
+            result.data.forEach(product => {
+                if (product.name.toLowerCase().includes(query)) {
+                    matching.push(product);
+                } else {
+                    nonMatching.push(product);
                 }
-            }, 2000);
-        }
-    }
-
-    /**
-     * Check if search results are empty and show appropriate message
-     */
-    private checkEmptySearchResults(): void {
-        if (this.elements.searchResults?.children.length === 0) {
-            this.elements.searchResults.innerHTML = `
-                <div style="text-align: center; padding: 20px; color: #999;">
-                    No more results
-                </div>
-            `;
-        }
-    }
-
-    /**
-     * Initialize the add item form
-     */
-    private initAddItemForm(): void {
-        const container = this.container.querySelector('.add-form-container');
-        if (!container) return;
-        
-        const callbacks: AddItemFormCallbacks = {
-            onSubmit: async (itemData) => {
-                if (!this.currentListId) return;
-                await this.service.addItem(this.currentListId, itemData);
+            });
+            
+            // Reorder: matching first, then non-matching
+            const reordered = [...matching, ...nonMatching];
+            
+            // Update grid with new order
+            this.swipeableGrid.updateProducts(reordered);
+            
+            // Go to first page to show matches
+            if (matching.length > 0) {
+                this.swipeableGrid.goToFirstPage();
             }
-        };
-        
-        this.addItemForm = new AddItemFormComponent(callbacks);
-        container.appendChild(this.addItemForm.getElement());
+        }
+    } catch (error) {
+        console.error('Error during search reorder:', error);
     }
+}
+
+/**
+ * Clear search and restore original order
+ */
+private async clearSearch(): Promise<void> {
+    console.log('🧹 Clearing search'); // DEBUG
+    
+    if (!this.swipeableGrid) {
+        console.log('❌ No swipeable grid found'); // DEBUG
+        return;
+    }
+    
+    try {
+        const result = await this.catalogRepo.findAll();
+        console.log('📦 Fetching original order:', result); // DEBUG
+        
+        if (result.success && result.data) {
+            // Restore original order (by name)
+            const sorted = [...result.data].sort((a, b) => 
+                a.name.localeCompare(b.name)
+            );
+            console.log('✅ Restored sorted order:', sorted.length); // DEBUG
+            
+            this.swipeableGrid.updateProducts(sorted);
+            this.swipeableGrid.goToFirstPage();
+        }
+    } catch (error) {
+        console.error('❌ Error clearing search:', error);
+    }
+}
 
     /**
      * Add item from catalog to list
