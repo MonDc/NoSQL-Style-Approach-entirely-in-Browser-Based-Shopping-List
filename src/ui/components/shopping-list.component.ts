@@ -197,7 +197,7 @@ private renderHeader(): string {
 }
 
 /**
- * Render search section - loupe disappears on focus
+ * Render search section - soft grey focus
  */
 private renderSearchSection(): string {
     return `
@@ -215,15 +215,16 @@ private renderSearchSection(): string {
                     box-sizing: border-box; 
                     background: #f8f8f8;
                     outline: none;
-                    transition: all 0.2s;
+                    transition: all 0.3s ease;
                 "
-                onfocus="this.placeholder=''; this.style.borderColor='#4CAF50'; this.style.background='white';"
-                onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8';"
+                onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
+                onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8'; this.style.boxShadow='none';"
             />
             <div class="search-results" style="margin-top: 12px;"></div>
         </section>
     `;
 }
+
 /**
  * Render featured items section - no "Featured Items" text
  */
