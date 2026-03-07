@@ -458,6 +458,7 @@ export class ShoppingListComponent {
             this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
         }
     }
+    
     /**
      * Handle search input
      */
@@ -540,14 +541,43 @@ export class ShoppingListComponent {
      * Add item from catalog to list
      */
     private async addCatalogItem(productId: string, productName: string): Promise<void> {
-        if (!this.currentListId) return;
+        if (!this.currentListId) {
+            alert('No active shopping list');
+            return;
+        }
         
-        await this.service.addItem(this.currentListId, {
-            name: productName,
-            quantity: 1,
-            unit: Unit.PIECE,
-            category: 'Groceries'
-        });
+        try {
+            console.log(`➕ Adding ${productName} to list...`);
+            
+            await this.service.addItem(this.currentListId, {
+                name: productName,
+                quantity: 1,
+                unit: Unit.PIECE,
+                category: 'Groceries'
+            });
+            
+            // ✅ SHOW FEEDBACK - Find the clicked button
+            const buttons = document.querySelectorAll(`[data-product-id="${productId}"]`);
+            buttons.forEach(btn => {
+                const originalHTML = btn.innerHTML;
+                const originalText = btn.textContent;
+                
+                // Save original for restoration
+                (btn as any)._originalHTML = originalHTML;
+                
+                // Change to success message
+                btn.innerHTML = '✅ Added!';
+                
+                // Restore after 1 second
+                setTimeout(() => {
+                    btn.innerHTML = (btn as any)._originalHTML || originalHTML;
+                }, 1000);
+            });
+            
+        } catch (error) {
+            console.error('❌ Error adding item:', error);
+            alert(`Failed to add ${productName}. Please try again.`);
+        }
     }
 
     /**
