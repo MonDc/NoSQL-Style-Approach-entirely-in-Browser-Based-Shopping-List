@@ -108,6 +108,43 @@ export class ShoppingListComponent {
         }
     }
 
+// In shopping-list.component.ts
+private async initializeSwipeableGrid(): Promise<void> {
+    if (!this.elements.categoryProducts) return;
+    
+    try {
+        const result = await this.catalogRepo.findAll();
+        
+        if (result.success && result.data) {
+            this.swipeableGrid = new SwipeableGrid(
+                result.data,
+                {
+                    onItemClick: (product) => this.addCatalogItem(product.id, product.name),
+                    onPageChange: (page) => console.log('Page:', page + 1)
+                },
+                {
+                    dimensions: {
+                        rows: 2,
+                        columns: 2,
+                        gap: 18  // Slightly larger gap
+                    },
+                    styling: {
+                        cardPadding: '24px 12px',  // Larger cards
+                        emojiSize: '48px',          // Larger emoji
+                        nameFontSize: '16px',        // Larger text
+                        cardBorderRadius: '18px'     // Slightly rounded
+                    }
+                }
+            );
+            
+            this.elements.categoryProducts.innerHTML = '';
+            this.elements.categoryProducts.appendChild(this.swipeableGrid.getElement());
+        }
+    } catch (error) {
+        console.error('Error initializing swipeable grid:', error);
+    }
+}
+
     /**
      * Create or get today's shopping list
      */
@@ -273,41 +310,6 @@ private async loadInitialData(): Promise<void> {
     
     this.initAddItemForm();
     this.subscribeToListUpdates();
-}
-
-    /**
-     * Initialize the product carousel with all products
-     */
-private async initializeSwipeableGrid(): Promise<void> {
-    if (!this.elements.categoryProducts) return;
-    
-    try {
-        const result = await this.catalogRepo.findAll();
-        
-        if (result.success && result.data) {
-            this.swipeableGrid = new SwipeableGrid(
-                result.data,
-                {
-                    onItemClick: (product) => this.addCatalogItem(product.id, product.name),
-                    onPageChange: (page) => console.log('Swiped to page:', page + 1)
-                },
-                {
-                    rows: 2,
-                    columns: 2,
-                    itemsPerPage: 4,
-                    showDots: true,
-                    infinite: true,
-                    swipeThreshold: 50
-                }
-            );
-            
-            this.elements.categoryProducts.innerHTML = '';
-            this.elements.categoryProducts.appendChild(this.swipeableGrid.getElement());
-        }
-    } catch (error) {
-        console.error('Error initializing swipeable grid:', error);
-        this.showGridError();
-    }
 }
 
 private showGridError(): void {
