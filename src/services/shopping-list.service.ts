@@ -19,7 +19,7 @@ import { ErrorHandler } from '../utils/error-handler.util';
  * Orchestrates repository operations and applies business rules
  */
 export class ShoppingListService {
-  private repository: ShoppingListRepository;
+  public repository: ShoppingListRepository;
   private catalogRepository: CatalogRepository;
   private validator: ShoppingListValidator;
   private errorHandler: ErrorHandler;
