@@ -528,39 +528,26 @@ export class ShoppingListComponent {
     }
 
     /**
+     * Toggle item status (complete/incomplete)
+     */
+    private async toggleItem(itemId: UUID): Promise<void> {
+        if (!this.currentListId) return;
+        await this.service.toggleItemStatus(this.currentListId, itemId);
+    }
+
+
+    /**
      * Add item from catalog to list
      */
     private async addCatalogItem(productId: string, productName: string): Promise<void> {
-        if (!this.currentListId) {
-            alert('No active shopping list');
-            return;
-        }
+        if (!this.currentListId) return;
         
-        try {
-            console.log(`➕ Adding ${productName} to list...`); // Debug log
-            
-            await this.service.addCatalogItemToList(
-                this.currentListId,
-                productId as UUID,
-                1 // default quantity
-            );
-            
-            console.log(`✅ ${productName} added successfully`); // Debug log
-            
-            // Optional: Show temporary success message
-            const btn = document.querySelector(`[data-product-id="${productId}"]`) as HTMLElement;
-            if (btn) {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '✅ Added!';
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                }, 1000);
-            }
-            
-        } catch (error) {
-            console.error('❌ Error adding item:', error);
-            alert(`Failed to add ${productName}. Please try again.`);
-        }
+        await this.service.addItem(this.currentListId, {
+            name: productName,
+            quantity: 1,
+            unit: Unit.PIECE,
+            category: 'Groceries'
+        });
     }
 
     /**
@@ -591,11 +578,10 @@ export class ShoppingListComponent {
      * Clear completed items
      */
     private async clearCompleted(): Promise<void> {
-        if (!this.currentListId || !this.currentList) return;
-        
-        if (confirm('Clear all completed items?')) {
-            const pendingItems = this.currentList.items.filter(i => i.status !== 'completed');
-            await this.service.repository.update(this.currentListId, { items: pendingItems });
+        if (!this.currentListId) return;
+        const result = await this.service.clearCompleted(this.currentListId);
+        if (result.success && result.data) {
+            console.log(`✅ Cleared completed items`);
         }
     }
 
