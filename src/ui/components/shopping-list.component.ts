@@ -176,86 +176,70 @@ export class ShoppingListComponent {
     }
 
     /**
-     * Render the main layout structure
-     */
-    private renderLayout(): void {
-        this.container.innerHTML = `
-            <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${this.renderSearchSection()}
-                ${this.renderFeaturedSection()}
-                ${this.renderListSection()}
-                ${this.renderActionsSection()}
-            </div>
-        `;
-    }
+ * Render the main layout structure - NO BOTTOM BUTTONS
+ */
+private renderLayout(): void {
+    this.container.innerHTML = `
+        <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            ${this.renderSearchSection()}
+            ${this.renderFeaturedSection()}
+            ${this.renderListSection()}
+            <!-- BOTTOM BUTTONS REMOVED - no Archive or Clear buttons -->
+        </div>
+    `;
+}
 
+/**
+ * Render search section
+ */
+private renderSearchSection(): string {
+    return `
+        <section style="margin-bottom: 24px;">
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="🔍" 
+                style="
+                    width: 100%; 
+                    padding: 14px 16px; 
+                    font-size: 16px; 
+                    border: 2px solid #e0e0e0; 
+                    border-radius: 30px; 
+                    box-sizing: border-box; 
+                    background: #f8f8f8;
+                    outline: none;
+                    transition: all 0.3s ease;
+                "
+                onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
+                onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8'; this.style.boxShadow='none';"
+            />
+            <div class="search-results" style="margin-top: 12px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render search section - soft grey focus
-     */
-    private renderSearchSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <input 
-                    type="text" 
-                    class="search-input" 
-                    placeholder="🔍" 
-                    style="
-                        width: 100%; 
-                        padding: 14px 16px; 
-                        font-size: 16px; 
-                        border: 2px solid #e0e0e0; 
-                        border-radius: 30px; 
-                        box-sizing: border-box; 
-                        background: #f8f8f8;
-                        outline: none;
-                        transition: all 0.3s ease;
-                    "
-                    onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
-                    onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8'; this.style.boxShadow='none';"
-                />
-                <div class="search-results" style="margin-top: 12px;"></div>
-            </section>
-        `;
-    }
+/**
+ * Render featured items section - swipeable grid
+ */
+private renderFeaturedSection(): string {
+    return `
+        <section style="margin-bottom: 24px;">
+            <div class="category-products" style="min-height: 240px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render featured items section - no "Featured Items" text
-     */
-    private renderFeaturedSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <div class="category-products" style="min-height: 200px;"></div>
-            </section>
-        `;
-    }
+/**
+ * Render shopping list section - with swipeable items
+ */
+private renderListSection(): string {
+    return `
+        <section style="margin-bottom: 24px;">
+            <div class="items-list" style="background: #f9f9f9; border-radius: 12px; padding: 16px; min-height: 100px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render shopping list section - no text, no count, just the list
-     */
-    private renderListSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <div class="items-list" style="background: #f9f9f9; border-radius: 12px; padding: 16px; min-height: 100px;"></div>
-            </section>
-        `;
-    }
-
-    /**
-     * Render action buttons section
-     */
-    private renderActionsSection(): string {
-        return `
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Archive
-                </button>
-                <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Clear
-                </button>
-            </div>
-        `;
-    }
         /**
          * Cache DOM elements for faster access
          */
@@ -373,10 +357,6 @@ export class ShoppingListComponent {
             onToggle: async (itemId: UUID) => {
                 if (!this.currentListId) return;
                 await this.service.repository.toggleItemStatus(this.currentListId, itemId);
-            },
-            onEdit: (itemId: UUID) => {
-                console.log('Edit item:', itemId);
-                // TODO: Implement edit functionality
             },
             onDelete: async (itemId: UUID) => {
                 if (!this.currentListId) return;
