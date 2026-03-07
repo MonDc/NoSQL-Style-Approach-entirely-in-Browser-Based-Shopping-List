@@ -3,7 +3,7 @@ import { ShoppingListDBSchema, ShoppingList, ShoppingListItem, UUID } from '../t
 
 // Database name and version
 const DB_NAME = 'shopping-list-app';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 /**
  * Service that manages IndexedDB connection and schema

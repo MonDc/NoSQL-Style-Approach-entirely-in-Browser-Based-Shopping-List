@@ -396,21 +396,34 @@ export class ShoppingListComponent {
             const products = result.data;
             
             if (products.length === 0) {
-                this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: #999;">No products in this category</div>';
+                this.elements.categoryProducts.innerHTML = `
+                    <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999;">
+                        <div style="font-size: 48px;">🔍</div>
+                        <div>No products in this category</div>
+                    </div>
+                `;
                 return;
             }
             
-            this.elements.categoryProducts.innerHTML = products.map(product => `
-                <button class="add-category-item" data-product-id="${product.id}" data-product-name="${product.name}"
-                    style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center;">
-                    <div style="font-size: 24px; margin-bottom: 5px;">${this.getCategoryEmoji(product.category)}</div>
-                    <div style="font-weight: bold;">${product.name}</div>
-                </button>
-            `).join('');
+            this.elements.categoryProducts.innerHTML = products.map(product => {
+                const emoji = this.getProductEmoji(product); // Use product-specific emoji
+                return `
+                    <button class="add-category-item" data-product-id="${product.id}" data-product-name="${product.name}"
+                        style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s;"
+                        onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
+                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none';"
+                    >
+                        <div style="font-size: 32px; margin-bottom: 8px;">${emoji}</div>
+                        <div style="font-weight: bold; font-size: 14px;">${product.name}</div>
+                        <div style="font-size: 11px; color: #666; margin-top: 4px;">${product.category || ''}</div>
+                    </button>
+                `;
+            }).join('');
             
+            // Re-attach event listeners
             this.elements.categoryProducts.querySelectorAll('.add-category-item').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const target = e.target as HTMLElement;
+                    const target = e.currentTarget as HTMLElement;
                     const productId = target.getAttribute('data-product-id');
                     const productName = target.getAttribute('data-product-name');
                     if (productId && productName) {
@@ -585,6 +598,93 @@ export class ShoppingListComponent {
             'Pantry': '🍚'
         };
         return emojis[category] || '📦';
+    }
+
+    /**
+     * Get specific emoji for each product
+     * @param product - The product object
+     * @returns Emoji string
+     */
+    private getProductEmoji(product: CatalogProduct): string {
+        // Product-specific icons
+        const productIcons: Record<string, string> = {
+            // Dairy
+            'Eggs': '🥚',
+            'Cheese': '🧀',
+            'Butter': '🧈',
+            'Yogurt': '🥄',
+            
+            // Produce
+            'Apples': '🍎',
+            'Bananas': '🍌',
+            'Tomatoes': '🍅',
+            'Potatoes': '🥔',
+            'Onions': '🧅',
+            'Lettuce': '🥬',
+            'Carrots': '🥕',
+            'Cucumber': '🥒',
+            'Broccoli': '🥦',
+            'Garlic': '🧄',
+            'Peppers': '🫑',
+            'Corn': '🌽',
+            'Mushrooms': '🍄',
+            
+            // Meat & Seafood
+            'Chicken Breast': '🍗',
+            'Ground Beef': '🥩',
+            'Salmon': '🐟',
+            'Shrimp': '🦐',
+            'Bacon': '🥓',
+            'Turkey': '🦃',
+            
+            // Bakery
+            'Bread': '🍞',
+            'Bagels': '🥯',
+            'Croissant': '🥐',
+            'Muffins': '🧁',
+            'Cookies': '🍪',
+            
+            // Beverages
+            'Coffee': '☕',
+            'Orange Juice': '🧃',
+            'Milk': '🥛',
+            'Soda': '🥤',
+            'Water': '💧',
+            'Beer': '🍺',
+            'Wine': '🍷',
+            
+            // Snacks
+            'Chocolate': '🍫',
+            'Chips': '🥨',
+            'Candy': '🍬',
+            'Ice Cream': '🍦',
+            'Popcorn': '🍿',
+            'Nuts': '🥜',
+            
+            // Canned Goods
+            'Canned Tuna': '🐟',
+            'Canned Beans': '🥫',
+            'Soup': '🍲',
+            
+            // Pantry
+            'Rice': '🍚',
+            'Pasta': '🍝',
+            'Olive Oil': '🫒',
+            'Flour': '🌾',
+            'Sugar': '🧂',
+            'Salt': '🧂',
+            'Spices': '🌶️',
+            
+            // Household
+            'Paper Towels': '🧻',
+            'Toilet Paper': '🧻',
+            'Soap': '🧼',
+            'Detergent': '🧴',
+            'Trash Bags': '🗑️'
+        };
+        
+        // Return product-specific icon or fallback to category icon
+        return productIcons[product.name] || this.getCategoryEmoji(product.category);
     }
 
     /**
