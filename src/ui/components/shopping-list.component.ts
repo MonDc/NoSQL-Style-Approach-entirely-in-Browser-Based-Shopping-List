@@ -167,99 +167,89 @@ private async initializeSwipeableGrid(): Promise<void> {
         }
     }
 
-    /**
-     * Render the main layout structure
-     */
-    private renderLayout(): void {
-        this.container.innerHTML = `
-            <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                ${this.renderHeader()}
-                ${this.renderSearchSection()}
-                ${this.renderFeaturedSection()}
-                ${this.renderListSection()}
-                ${this.renderActionsSection()}
+/**
+ * Render the main layout structure
+ */
+private renderLayout(): void {
+    this.container.innerHTML = `
+        <div class="shopping-list-app" style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            ${this.renderHeader()}
+            ${this.renderSearchSection()}
+            ${this.renderFeaturedSection()}
+            ${this.renderListSection()}
+            ${this.renderActionsSection()}
+        </div>
+    `;
+}
+
+/**
+ * Render header section
+ */
+private renderHeader(): string {
+    return `
+        <header style="margin-bottom: 20px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 32px;">🛒</span>
+                <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
             </div>
-        `;
-    }
+        </header>
+    `;
+}
 
-    /**
-     * Render header section
-     */
-    private renderHeader(): string {
-        return `
-            <header style="margin-bottom: 20px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 32px;">🛒</span>
-                    <span class="list-title" style="font-size: 18px; font-weight: 500; color: #333;"></span>
-                </div>
-                <!-- Removed list-summary div -->
-            </header>
-        `;
-    }
+/**
+ * Render search section - no text label, just input with icon placeholder
+ */
+private renderSearchSection(): string {
+    return `
+        <section style="margin-bottom: 30px;">
+            <input 
+                type="text" 
+                class="search-input" 
+                placeholder="🔍" 
+                style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+            />
+            <div class="search-results" style="margin-top: 10px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render search section
-     */
-    private renderSearchSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <h3 style="margin-bottom: 10px;">🔍 Search</h3>
-                <input 
-                    type="text" 
-                    class="search-input" 
-                    placeholder="Search for items..." 
-                    style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box;"
-                />
-                <div class="search-results" style="margin-top: 10px;"></div>
-            </section>
-        `;
-    }
+/**
+ * Render featured items section - no "Featured Items" text
+ */
+private renderFeaturedSection(): string {
+    return `
+        <section style="margin-bottom: 30px;">
+            <div class="category-products" style="min-height: 200px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render featured items section
-     */
-    private renderFeaturedSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <h3 style="margin-bottom: 10px;">⭐ Featured Items</h3>
-                <div class="category-products" style="min-height: 200px;"></div>
-            </section>
-        `;
-    }
+/**
+ * Render shopping list section - no text, no count, just the list
+ */
+private renderListSection(): string {
+    return `
+        <section style="margin-bottom: 30px;">
+            <div class="items-list" style="background: #f9f9f9; border-radius: 12px; padding: 16px; min-height: 100px;"></div>
+        </section>
+    `;
+}
 
-    /**
-     * Render shopping list section
-     */
-    private renderListSection(): string {
-        return `
-            <section style="margin-bottom: 30px;">
-                <h3 style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                    <span>📝 My List</span>
-                    <span class="item-count" style="background: #f0f0f0; padding: 2px 8px; border-radius: 12px;">0</span>
-                </h3>
-                <div class="items-list" style="background: #f9f9f9; border-radius: 8px; padding: 15px;"></div>
-            </section>
-        `;
-    }
-
-    /**
-     * Render action buttons section
-     */
-    private renderActionsSection(): string {
-        return `
-            <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Archive List
-                </button>
-                <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
-                    Clear Completed
-                </button>
-            </div>
-        `;
-    }
-
-
-
+/**
+ * Render action buttons section
+ */
+private renderActionsSection(): string {
+    return `
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="archive-list" style="padding: 8px 16px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Archive
+            </button>
+            <button class="clear-completed" style="padding: 8px 16px; background: #666; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Clear
+            </button>
+        </div>
+    `;
+}
     /**
      * Cache DOM elements for faster access
      */
