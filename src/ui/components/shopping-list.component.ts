@@ -408,15 +408,23 @@ private setupEventListeners(): void {
     }
 
 /**
- * Handle search input - reorder grid items instead of showing list
+ * Handle search input - matching items appear at top-left of grid
  */
 private async handleSearch(): Promise<void> {
     const query = this.elements.searchInput?.value.trim().toLowerCase() || '';
+    console.log('🔍 Searching for:', query);
     
-    if (!this.swipeableGrid) return;
+    if (!this.swipeableGrid) {
+        console.log('❌ No swipeable grid found');
+        return;
+    }
+    
+    if (query.length === 0) {
+        await this.clearSearch();
+        return;
+    }
     
     try {
-        // Get all products
         const result = await this.catalogRepo.findAll();
         
         if (result.success && result.data) {
@@ -432,19 +440,27 @@ private async handleSearch(): Promise<void> {
                 }
             });
             
-            // Reorder: matching first, then non-matching
+            // Sort matching items by name (optional)
+            matching.sort((a, b) => a.name.localeCompare(b.name));
+            
+            // Sort non-matching items by name (optional)
+            nonMatching.sort((a, b) => a.name.localeCompare(b.name));
+            
+            // Reorder: matching first (will appear in top-left of page 1), then non-matching
             const reordered = [...matching, ...nonMatching];
+            
+            console.log(`✅ ${matching.length} matching items will appear at top-left`);
             
             // Update grid with new order
             this.swipeableGrid.updateProducts(reordered);
             
-            // Go to first page to show matches
+            // Go to first page to show matches at top-left
             if (matching.length > 0) {
                 this.swipeableGrid.goToFirstPage();
             }
         }
     } catch (error) {
-        console.error('Error during search reorder:', error);
+        console.error('❌ Error during search reorder:', error);
     }
 }
 
