@@ -405,14 +405,12 @@ export class ShoppingListComponent {
                 return;
             }
             
+            // Generate HTML
             this.elements.categoryProducts.innerHTML = products.map(product => {
-                const emoji = this.getProductEmoji(product); // Use product-specific emoji
+                const emoji = this.getProductEmoji(product);
                 return `
                     <button class="add-category-item" data-product-id="${product.id}" data-product-name="${product.name}"
-                        style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s;"
-                        onmouseover="this.style.transform='scale(1.05)'; this.style.boxShadow='0 4px 8px rgba(0,0,0,0.1)';"
-                        onmouseout="this.style.transform='scale(1)'; this.style.boxShadow='none';"
-                    >
+                        style="padding: 12px; background: white; border: 1px solid #ddd; border-radius: 8px; cursor: pointer; text-align: center; transition: all 0.2s;">
                         <div style="font-size: 32px; margin-bottom: 8px;">${emoji}</div>
                         <div style="font-weight: bold; font-size: 14px;">${product.name}</div>
                         <div style="font-size: 11px; color: #666; margin-top: 4px;">${product.category || ''}</div>
@@ -420,24 +418,46 @@ export class ShoppingListComponent {
                 `;
             }).join('');
             
-            // Re-attach event listeners
-            this.elements.categoryProducts.querySelectorAll('.add-category-item').forEach(btn => {
+            // FIX: Re-attach event listeners to the new buttons
+            const buttons = this.elements.categoryProducts.querySelectorAll('.add-category-item');
+            console.log(`🔘 Attaching ${buttons.length} event listeners`); // Debug log
+            
+            buttons.forEach(btn => {
                 btn.addEventListener('click', (e) => {
+                    e.preventDefault(); // Prevent any default behavior
+                    e.stopPropagation(); // Stop event bubbling
+                    
                     const target = e.currentTarget as HTMLElement;
                     const productId = target.getAttribute('data-product-id');
                     const productName = target.getAttribute('data-product-name');
+                    
+                    console.log(`👆 Clicked: ${productName} (${productId})`); // Debug log
+                    
                     if (productId && productName) {
-                        this.addCatalogItem(productId, productName);
+                        this.addCatalogItem(productId, productName).catch(error => {
+                            console.error('Error adding item:', error);
+                            alert('Failed to add item. Please try again.');
+                        });
                     }
+                });
+                
+                // Add hover effects via JS (optional)
+                btn.addEventListener('mouseenter', () => {
+                    (btn as HTMLElement).style.transform = 'scale(1.05)';
+                    (btn as HTMLElement).style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                });
+                
+                btn.addEventListener('mouseleave', () => {
+                    (btn as HTMLElement).style.transform = 'scale(1)';
+                    (btn as HTMLElement).style.boxShadow = 'none';
                 });
             });
             
         } catch (error) {
-            console.error('Error loading category products:', error);
+            console.error('❌ Error loading category products:', error);
             this.elements.categoryProducts.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: red;">Error loading products</div>';
         }
     }
-
     /**
      * Handle search input
      */
@@ -517,14 +537,29 @@ export class ShoppingListComponent {
         }
         
         try {
+            console.log(`➕ Adding ${productName} to list...`); // Debug log
+            
             await this.service.addCatalogItemToList(
                 this.currentListId,
                 productId as UUID,
                 1 // default quantity
             );
+            
+            console.log(`✅ ${productName} added successfully`); // Debug log
+            
+            // Optional: Show temporary success message
+            const btn = document.querySelector(`[data-product-id="${productId}"]`) as HTMLElement;
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅ Added!';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                }, 1000);
+            }
+            
         } catch (error) {
-            console.error('Error adding item:', error);
-            alert('Failed to add item');
+            console.error('❌ Error adding item:', error);
+            alert(`Failed to add ${productName}. Please try again.`);
         }
     }
 
