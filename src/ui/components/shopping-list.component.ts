@@ -197,7 +197,7 @@ private renderHeader(): string {
 }
 
 /**
- * Render search section - no text label, just input with icon placeholder
+ * Render search section - loupe disappears on focus
  */
 private renderSearchSection(): string {
     return `
@@ -206,13 +206,24 @@ private renderSearchSection(): string {
                 type="text" 
                 class="search-input" 
                 placeholder="🔍" 
-                style="width: 100%; padding: 12px; font-size: 16px; border: 2px solid #ddd; border-radius: 8px; box-sizing: border-box;"
+                style="
+                    width: 100%; 
+                    padding: 14px 16px; 
+                    font-size: 16px; 
+                    border: 2px solid #e0e0e0; 
+                    border-radius: 30px; 
+                    box-sizing: border-box; 
+                    background: #f8f8f8;
+                    outline: none;
+                    transition: all 0.2s;
+                "
+                onfocus="this.placeholder=''; this.style.borderColor='#4CAF50'; this.style.background='white';"
+                onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='#f8f8f8';"
             />
-            <div class="search-results" style="margin-top: 10px;"></div>
+            <div class="search-results" style="margin-top: 12px;"></div>
         </section>
     `;
 }
-
 /**
  * Render featured items section - no "Featured Items" text
  */
