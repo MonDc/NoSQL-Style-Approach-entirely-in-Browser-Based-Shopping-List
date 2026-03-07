@@ -103,61 +103,74 @@ export class ShoppingListService {
    * Add item to list with business logic
    */
   public async addItem(
-    listId: UUID,
-    itemData: {
-      name: string;
-      quantity: number;
-      unit: Unit;
-      priority?: Priority;
-      category?: string;
-      notes?: string;
-    }
+      listId: UUID,
+      itemData: {
+          name: string;
+          quantity: number;
+          unit: Unit;
+          priority?: Priority;
+          category?: string;
+          notes?: string;
+      }
   ): Promise<OperationResult<ShoppingList>> {
-    try {
-      // Validate item data
-      const validation = this.validator.validateNewItem(itemData);
-      if (!validation.isValid) {
-        throw new Error(validation.errors.join(', '));
+      try {
+          // Validate item data
+          const validation = this.validator.validateNewItem(itemData);
+          if (!validation.isValid) {
+              throw new Error(validation.errors.join(', '));
+          }
+
+          // Create item with defaults
+          const newItem: IShoppingListItem = {
+              id: generateId(),
+              name: itemData.name,
+              quantity: itemData.quantity,
+              unit: itemData.unit,
+              priority: itemData.priority || Priority.MEDIUM,
+              category: itemData.category,
+              notes: itemData.notes,
+              status: ItemStatus.PENDING,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              tags: []
+          };
+
+          // Get current list first
+          const listResult = await this.repository.findById(listId);
+          if (!listResult.success || !listResult.data) {
+              throw new Error('List not found');
+          }
+
+          // Add new item to the BEGINNING of the array
+          const updatedList = {
+              ...listResult.data,
+              items: [newItem, ...listResult.data.items], // ← This puts it at the top
+              updatedAt: new Date()
+          };
+
+          // Save updated list
+          const result = await this.repository.update(listId, updatedList);
+          
+          if (result.success && result.data) {
+              this.errorHandler.logInfo('Item added to list', { 
+                  listId, 
+                  itemId: newItem.id 
+              });
+              
+              const listModel = new ShoppingList(result.data);
+              return {
+                  success: true,
+                  data: listModel
+              };
+          }
+
+          return result as unknown as OperationResult<ShoppingList>;
+      } catch (error) {
+          return this.errorHandler.handleError<ShoppingList>(
+              error, 
+              'Failed to add item to list'
+          );
       }
-
-      // Create item with defaults
-      const newItem: IShoppingListItem = {
-        id: generateId(),
-        name: itemData.name,
-        quantity: itemData.quantity,
-        unit: itemData.unit,
-        priority: itemData.priority || Priority.MEDIUM,
-        category: itemData.category,
-        notes: itemData.notes,
-        status: ItemStatus.PENDING,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        tags: []
-      };
-
-      const result = await this.repository.addItemToList(listId, newItem);
-      
-      if (result.success && result.data) {
-        this.errorHandler.logInfo('Item added to list', { 
-          listId, 
-          itemId: newItem.id 
-        });
-        
-        // Return as model
-        const list = new ShoppingList(result.data);
-        return {
-          success: true,
-          data: list
-        };
-      }
-
-      return result as OperationResult<ShoppingList>;
-    } catch (error) {
-      return this.errorHandler.handleError<ShoppingList>(
-        error, 
-        'Failed to add item to list'
-      );
-    }
   }
 
 
