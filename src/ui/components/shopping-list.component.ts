@@ -450,7 +450,7 @@ export class ShoppingListComponent {
     }
 
     /**
-     * Handle search input - matching items appear at top-left of grid
+     * Handle search input - reorder grid items based on search
      */
     private async handleSearch(): Promise<void> {
         const query = this.elements.searchInput?.value.trim().toLowerCase() || '';
@@ -461,51 +461,61 @@ export class ShoppingListComponent {
             return;
         }
         
-        if (query.length === 0) {
-            await this.clearSearch();
-            return;
-        }
-        
         try {
             const result = await this.catalogRepo.findAll();
             
             if (result.success && result.data) {
+                if (query.length === 0) {
+                    // Restore original order when search is empty
+                    const sorted = [...result.data].sort((a, b) => a.name.localeCompare(b.name));
+                    this.swipeableGrid.updateProducts(sorted);
+                    this.swipeableGrid.goToFirstPage();
+                    return;
+                }
+                
                 // Split into matching and non-matching
                 const matching: CatalogProduct[] = [];
                 const nonMatching: CatalogProduct[] = [];
                 
                 result.data.forEach(product => {
-                    if (product.name.toLowerCase().includes(query)) {
+                    // Check if product name starts with the query (case insensitive)
+                    if (product.name.toLowerCase().startsWith(query)) {
                         matching.push(product);
-                    } else {
+                    } 
+                    // Also check if it contains the query (for partial matches)
+                    else if (product.name.toLowerCase().includes(query)) {
+                        matching.push(product); // Push contains matches after startsWith
+                    }
+                    else {
                         nonMatching.push(product);
                     }
                 });
                 
-                // Sort matching items by name (optional)
-                matching.sort((a, b) => a.name.localeCompare(b.name));
+                // Sort matching items (startsWith first, then contains)
+                matching.sort((a, b) => {
+                    const aStarts = a.name.toLowerCase().startsWith(query);
+                    const bStarts = b.name.toLowerCase().startsWith(query);
+                    if (aStarts && !bStarts) return -1;
+                    if (!aStarts && bStarts) return 1;
+                    return a.name.localeCompare(b.name);
+                });
                 
-                // Sort non-matching items by name (optional)
+                // Sort non-matching items alphabetically
                 nonMatching.sort((a, b) => a.name.localeCompare(b.name));
                 
-                // Reorder: matching first (will appear in top-left of page 1), then non-matching
+                // Reorder: matching first (prioritizing startsWith), then non-matching
                 const reordered = [...matching, ...nonMatching];
                 
-                console.log(`✅ ${matching.length} matching items will appear at top-left`);
+                console.log(`✅ ${matching.length} matching items found`);
                 
                 // Update grid with new order
                 this.swipeableGrid.updateProducts(reordered);
-                
-                // Go to first page to show matches at top-left
-                if (matching.length > 0) {
-                    this.swipeableGrid.goToFirstPage();
-                }
+                this.swipeableGrid.goToFirstPage();
             }
         } catch (error) {
             console.error('❌ Error during search reorder:', error);
         }
     }
-
     /**
      * Clear search and restore original order
      */
