@@ -212,7 +212,7 @@ export class ShoppingListComponent {
                     bottom: -40px;
                     z-index: 0;
                     pointer-events: none;
-                    opacity: 0.1;  /* ← ADDED */
+                    opacity: 0.1;
                 ">
                     <!-- Grandpa div - centers everything -->
                     <div style="
@@ -221,11 +221,12 @@ export class ShoppingListComponent {
                         justify-content: center;
                         width: 100%;
                         height: 100%;
-                        opacity: 0.5;  /* ← ADD THIS LINE */
+                        opacity: 0.5;
                     ">
-                        <!-- Parent div - controls size -->
+                        <!-- Parent div - controls size - ADD THIS BACK -->
                         <div style="
-
+                            width: 120px;
+                            height: 120px;
                             display: flex;
                             align-items: center;
                             justify-content: center;
@@ -252,6 +253,8 @@ export class ShoppingListComponent {
                             outline: none;
                             transition: all 0.3s ease;
                             backdrop-filter: blur(2px);
+                            line-height: normal;
+                            vertical-align: middle;
                         "
                         onfocus="this.placeholder=''; this.style.borderColor='#B0B0B0'; this.style.background='#FFFFFF'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.05)';"
                         onblur="this.placeholder='🔍'; this.style.borderColor='#e0e0e0'; this.style.background='rgba(255,255,255,0.9)'; this.style.boxShadow='none';"
@@ -261,7 +264,6 @@ export class ShoppingListComponent {
             </div>
         `;
     }
-
     /**
      * Render featured items section - swipeable grid
      */
