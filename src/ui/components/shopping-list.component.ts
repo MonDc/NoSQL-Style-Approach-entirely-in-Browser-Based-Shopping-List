@@ -468,47 +468,153 @@ private renderListSection(): string {
         }
     }
 
-    /**
-     * Add item from catalog to list
-     */
-    private async addCatalogItem(productId: string, productName: string): Promise<void> {
-        if (!this.currentListId) {
-            alert('No active shopping list');
-            return;
+/**
+ * Add item from catalog to list with beautiful green flash animation
+ */
+private async addCatalogItem(productId: string, productName: string): Promise<void> {
+    if (!this.currentListId) {
+        alert('No active shopping list');
+        return;
+    }
+    
+    // Find the clicked card element
+    const card = document.querySelector(`[data-product-id="${productId}"]`) as HTMLElement;
+    if (!card) return;
+    
+    // Store original card styles and content
+    const originalHTML = card.innerHTML;
+    const originalBackground = card.style.background;
+    const originalBorder = card.style.border;
+    const originalTransition = card.style.transition;
+    const originalOpacity = card.style.opacity;
+    
+    // Disable ALL cards to prevent multiple clicks
+    const allCards = document.querySelectorAll('.product-card, .add-category-item, .grid-product-card');
+    allCards.forEach(c => {
+        (c as HTMLElement).style.pointerEvents = 'none';
+        (c as HTMLElement).style.opacity = '1';
+    });
+    
+    try {
+        // Clear card content and make it white
+        card.innerHTML = '';
+        card.style.background = 'white';
+        card.style.opacity = '1';
+        card.style.transition = 'all 0.3s ease';
+        
+        // Create and animate the green tick
+        const tick = document.createElement('div');
+        tick.style.cssText = `
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: tickPop 0.8s ease-out;
+        `;
+        
+        const tickSpan = document.createElement('span');
+        tickSpan.style.cssText = `
+            color: #4CAF50;
+            font-size: 120px;
+            font-weight: bold;
+            text-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+            animation: tickScale 0.5s ease-out;
+            line-height: 1;
+        `;
+        tickSpan.innerHTML = '✓';
+        
+        tick.appendChild(tickSpan);
+        card.appendChild(tick);
+        
+        // Add keyframe animations to document if not present
+        if (!document.getElementById('tick-animations')) {
+            const style = document.createElement('style');
+            style.id = 'tick-animations';
+            style.innerHTML = `
+                @keyframes tickPop {
+                    0% { transform: scale(0); opacity: 0; }
+                    50% { transform: scale(1.2); }
+                    100% { transform: scale(1); opacity: 1; }
+                }
+                @keyframes tickScale {
+                    0% { transform: scale(0); }
+                    60% { transform: scale(1.3); }
+                    100% { transform: scale(1); }
+                }
+            `;
+            document.head.appendChild(style);
         }
         
-        try {
-            await this.service.addItem(this.currentListId, {
-                name: productName,
-                quantity: 1,
-                unit: Unit.PIECE,
-                category: 'Groceries'
+        // Add the item to database
+        await this.service.addItem(this.currentListId, {
+            name: productName,
+            quantity: 1,
+            unit: Unit.PIECE,
+            category: 'Groceries'
+        });
+        
+        // Wait 2/3 second before restoring
+        setTimeout(() => {
+            // Restore original card content and styles
+            card.innerHTML = originalHTML;
+            card.style.background = originalBackground;
+            card.style.border = originalBorder;
+            card.style.transition = originalTransition;
+            card.style.opacity = originalOpacity;
+            
+            // Re-enable all cards and restore their opacity
+            allCards.forEach(c => {
+                (c as HTMLElement).style.pointerEvents = 'auto';
+                (c as HTMLElement).style.opacity = '1';
             });
             
-            this.showAddFeedback(productId);
+        }, 666); // 2/3 of a second (666ms)
+        
+    } catch (error) {
+        console.error('❌ Error adding item:', error);
+        
+        // Show error state
+        card.innerHTML = '';
+        card.style.background = '#fff1f0';
+        card.style.opacity = '1';
+        
+        const errorTick = document.createElement('div');
+        errorTick.style.cssText = `
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        `;
+        
+        const xSpan = document.createElement('span');
+        xSpan.style.cssText = `
+            color: #ff4444;
+            font-size: 120px;
+            font-weight: bold;
+            animation: tickPop 0.5s ease-out;
+        `;
+        xSpan.innerHTML = '✗';
+        
+        errorTick.appendChild(xSpan);
+        card.appendChild(errorTick);
+        
+        // Restore after error
+        setTimeout(() => {
+            card.innerHTML = originalHTML;
+            card.style.background = originalBackground;
+            card.style.border = originalBorder;
+            card.style.transition = originalTransition;
+            card.style.opacity = originalOpacity;
             
-        } catch (error) {
-            console.error('❌ Error adding item:', error);
-            alert(`Failed to add ${productName}. Please try again.`);
-        }
+            allCards.forEach(c => {
+                (c as HTMLElement).style.pointerEvents = 'auto';
+                (c as HTMLElement).style.opacity = '1';
+            });
+        }, 666);
     }
-
-    /**
-     * Show feedback when item is added
-     */
-    private showAddFeedback(productId: string): void {
-        const buttons = document.querySelectorAll(`[data-product-id="${productId}"]`);
-        buttons.forEach(btn => {
-            const originalHTML = btn.innerHTML;
-            (btn as any)._originalHTML = originalHTML;
-            btn.innerHTML = '✅ Added!';
-            
-            setTimeout(() => {
-                btn.innerHTML = (btn as any)._originalHTML || originalHTML;
-            }, 1000);
-        });
-    }
-
+}
     /**
      * Subscribe to real-time list updates
      */
