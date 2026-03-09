@@ -15,7 +15,6 @@ export class SwipeDetector {
     private threshold: number = 70;
     private startX: number = 0;
     private startY: number = 0;
-    private currentX: number = 0;
     private isSwiping: boolean = false;
     private isDragging: boolean = false;
     private boundTouchStart: (e: TouchEvent) => void;
@@ -55,7 +54,6 @@ export class SwipeDetector {
     private handleTouchStart(e: TouchEvent): void {
         this.startX = e.touches[0].clientX;
         this.startY = e.touches[0].clientY;
-        this.currentX = this.startX;
         this.isSwiping = true;
         this.isDragging = false;
     }
@@ -71,7 +69,6 @@ export class SwipeDetector {
         if (Math.abs(diffX) > Math.abs(diffY)) {
             e.preventDefault(); // prevent scrolling
             this.isDragging = true;
-            this.currentX = currentX;
             this.callbacks.onDragMove?.(diffX);
         } else {
             // Vertical scroll – stop swipe detection
@@ -98,7 +95,6 @@ export class SwipeDetector {
     private handleMouseDown(e: MouseEvent): void {
         this.startX = e.clientX;
         this.startY = e.clientY;
-        this.currentX = this.startX;
         this.isSwiping = true;
         this.isDragging = false;
     }
@@ -110,7 +106,6 @@ export class SwipeDetector {
         if (Math.abs(diffX) > Math.abs(diffY)) {
             e.preventDefault();
             this.isDragging = true;
-            this.currentX = e.clientX;
             this.callbacks.onDragMove?.(diffX);
         } else {
             this.isSwiping = false;
