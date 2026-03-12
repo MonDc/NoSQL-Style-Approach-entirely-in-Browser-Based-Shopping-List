@@ -63,7 +63,6 @@ export class ShoppingListComponent {
     };
 
     // Constants
-    private readonly USER_ID = 'demo-user';
     private readonly DEBOUNCE_DELAY = 150;
 
     constructor(containerId: string) {
@@ -85,6 +84,10 @@ export class ShoppingListComponent {
         try {
             await this.ensureDatabaseReady();
             await this.ensureListExists();
+
+    // Get the current list ID after it's created/loaded
+    const listId = this.service.currentListId;
+    console.log('📋 Current shopping list ID:', listId);
             this.renderLayout();
             this.cacheElements();
             this.setupEventListeners();
@@ -153,27 +156,34 @@ export class ShoppingListComponent {
             this.showError('Failed to load products');  // ← Use showError instead
         }
     }
-        /**
+    /**
      * Create or get today's shopping list
      */
-    private async ensureListExists(): Promise<void> {
-        const lists = await this.service.getUserLists(this.USER_ID);
+private async ensureListExists(): Promise<void> {
+    const lists = await this.service.getUserLists('demo-user');
+    console.log('📋 User lists:', lists); // ADD THIS
+    
+    if (lists.success && lists.data && lists.data.length > 0) {
+        this.currentListId = lists.data[0].id;
+        this.currentList = lists.data[0];
+        // Tell the service about this list ID
+        this.service.setCurrentList(this.currentListId); // ADD THIS
+        console.log('📋 Using existing list:', this.currentListId);
+    } else {
+        const newList = await this.service.createList(
+            `Shopping List ${new Date().toLocaleDateString()}`,
+            'demo-user'
+        );
         
-        if (lists.success && lists.data && lists.data.length > 0) {
-            this.currentListId = lists.data[0].id;
-            this.currentList = lists.data[0];
-        } else {
-            const newList = await this.service.createList(
-                `Shopping List ${new Date().toLocaleDateString()}`,
-                this.USER_ID
-            );
-            
-            if (newList.success && newList.data) {
-                this.currentListId = newList.data.id;
-                this.currentList = newList.data;
-            }
+        if (newList.success && newList.data) {
+            this.currentListId = newList.data.id;
+            this.currentList = newList.data;
+            // createList should already set it, but just in case
+            this.service.setCurrentList(this.currentListId); // ADD THIS
+            console.log('🆕 Created new list:', this.currentListId);
         }
     }
+}
 
     /**
  * Render the main layout structure - NO BOTTOM BUTTONS

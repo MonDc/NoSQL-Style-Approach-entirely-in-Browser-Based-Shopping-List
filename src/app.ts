@@ -15,6 +15,7 @@ class ShoppingListApp {
   private listComponent: ShoppingListComponent;
 
   constructor() {
+    console.log('🏗️ App constructor starting...'); // BINGO DEBUGO
     // Initialize core services (singletons)
     this.dbService = DatabaseService.getInstance();
     this.listService = new ShoppingListService();
@@ -22,6 +23,10 @@ class ShoppingListApp {
     
     // Create main UI component (mounts to #app)
     this.listComponent = new ShoppingListComponent('app');
+
+    // Enable sync - use your Pi's IP
+    const PI_IP = '192.168.178.21'; // Your Pi's actual IP
+    this.listService.enableSync(`ws://${PI_IP}:8080`);
   }
 
   /**
