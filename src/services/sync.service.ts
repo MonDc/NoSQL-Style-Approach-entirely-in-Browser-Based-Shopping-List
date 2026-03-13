@@ -29,22 +29,23 @@ export class SyncService {
         };
 
         this.ws.onmessage = (event) => {
-            console.log('📩 RAW:', event.data);
-            try {
-                const data = JSON.parse(event.data);
-                console.log('📦 PARSED:', data);
-                console.log('🔍 Type:', data.type);
-                console.log('🎯 Source:', data.sourceId, 'vs Client:', this.clientId);
-                
-                if (data.sourceId === this.clientId) {
-                    console.log('⏭️ Ignoring own message');
-                    return;
-                }
-                
-                this.listeners.forEach(cb => cb(data));
-            } catch (e) {
-                console.error('Parse error:', e);
+        console.log('📩 RAW:', event.data);
+        try {
+            const data = JSON.parse(event.data);
+            console.log('📦 PARSED:', data);
+            console.log('🔍 Type:', data.type);
+            console.log('🎯 Source:', data.sourceId, 'vs Client:', this.clientId);
+            
+            if (data.sourceId === this.clientId) {
+            console.log('⏭️ Ignoring own message');
+            return;
             }
+            
+            console.log('📢 Forwarding to listeners');
+            this.listeners.forEach(cb => cb(data));
+        } catch (e) {
+            console.error('Parse error:', e);
+        }
         };
 
         this.ws.onclose = () => {
@@ -65,24 +66,33 @@ export class SyncService {
         }
     }
 
-    public broadcast(event: Omit<SyncEvent, 'sourceId' | 'timestamp'>): void {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            console.warn('⚠️ Not connected to sync server');
-            return;
-        }
+    // In sync.service.ts, update these methods:
 
-        const fullEvent: SyncEvent = {
-            ...event,
-            sourceId: this.clientId,
-            timestamp: Date.now()
-        };
+    public broadcast(event: any): void {
+        
+    if (!this.ws || this.ws.readyState !== 1) {
+        console.warn('⚠️ WebSocket not ready, message queued or dropped');
+        // Option 1: Drop it (simplest)
+        return;
+        
+        // Option 2: Queue it (better but more complex)
+        // this.pendingMessages.push(event);
+    }
+    
+    try {
+        this.ws.send(JSON.stringify(event));
+        console.log('📤 Broadcast sent:', event.type);
+    } catch (error) {
+        console.error('❌ Broadcast failed:', error);
+    }
+    }
 
-        try {
-            this.ws.send(JSON.stringify(fullEvent));
-            console.log('📤 Broadcast sent:', event.type); // Add this log
-        } catch (error) {
-            console.error('Failed to send:', error);
-        }
+    /**
+     * Check if WebSocket is connected and ready
+     */
+    public isConnected(): boolean {
+        // Fix: Use 1 instead of WebSocket.OPEN
+        return this.ws !== null && this.ws.readyState === 1;
     }
 
     public onSync(callback: (event: SyncEvent) => void): () => void {
@@ -94,12 +104,5 @@ export class SyncService {
 
     public disconnect(): void {
         this.ws?.close();
-    }
-
-    /**
-     * Check if WebSocket is connected and ready
-     */
-    public isConnected(): boolean {
-        return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
     }
 }

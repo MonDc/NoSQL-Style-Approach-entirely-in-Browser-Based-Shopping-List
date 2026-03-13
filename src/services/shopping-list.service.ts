@@ -11,9 +11,9 @@ import {
     CatalogProduct
 } from '../types/shopping-list.types';
 import { ShoppingList } from '../models/shopping-list.model';
-import { generateId } from '../utils/id-generator.util';
+import { generateId, generateStableUUID } from '../utils/id-generator.util';
 import { ErrorHandler } from '../utils/error-handler.util';
-import { SyncService, SyncEvent } from './sync.service'; // ADD THIS
+import { SyncService, SyncEvent } from './sync.service';
 
 /**
  * Business logic layer for shopping lists
@@ -24,8 +24,8 @@ export class ShoppingListService {
     private catalogRepository: CatalogRepository;
     private validator: ShoppingListValidator;
     private errorHandler: ErrorHandler;
-    private syncService: SyncService | null = null; // ADD THIS
-    private clientId: string; // ADD THIS
+    private _syncService: SyncService | null = null;
+    private clientId: string;
     private _currentListId: UUID | null = null;
 
     constructor() {
@@ -33,7 +33,7 @@ export class ShoppingListService {
         this.catalogRepository = new CatalogRepository();
         this.validator = new ShoppingListValidator();
         this.errorHandler = ErrorHandler.getInstance();
-        this.clientId = this.generateClientId(); // ADD THIS
+        this.clientId = this.generateClientId();
     }
 
     /* ==================== SYNC METHODS ==================== */
@@ -44,61 +44,154 @@ export class ShoppingListService {
 
     /**
      * Enable real-time sync between devices
-     * @param serverUrl WebSocket server URL (ws://192.168.178.21:8080)
+     * @param serverUrl WebSocket server URL (e.g., ws://192.168.178.21:8080)
      */
     public enableSync(serverUrl: string): void {
-        console.log('🔌 enableSync CALLED with URL:', serverUrl); // debug
-        this.syncService = new SyncService(serverUrl, this.clientId);
-        
-        this.syncService.onSync(async (event: SyncEvent) => {
-            console.log('🔄 Remote sync received:', event.type);
+        console.log('🔌 enableSync CALLED with URL:', serverUrl);
+        if (!serverUrl) {
+            console.error('❌ No server URL provided');
+            return;
+        }
+        try {
+            this._syncService = new SyncService(serverUrl, this.clientId);
+            console.log('✅ _syncService created');
             
-            try {
-                switch (event.type) {
-                    case 'ADD_ITEM':
-                        await this.applyRemoteAdd(event.listId, event.data);
-                        break;
-                    case 'TOGGLE_ITEM':
-                        await this.applyRemoteToggle(event.listId, event.data);
-                        break;
-                    case 'DELETE_ITEM':
-                        await this.applyRemoteDelete(event.listId, event.data);
-                        break;
-                    case 'CLEAR_COMPLETED':
-                        await this.applyRemoteClear(event.listId);
-                        break;
-                }
-            } catch (error) {
-                console.error('Failed to apply remote sync:', error);
-            }
-        });
-    }
-
-    private async applyRemoteAdd(listId: UUID, data: any): Promise<void> {
-        await this._addItem(listId, data, true);
-    }
-
-    private async applyRemoteToggle(listId: UUID, data: { itemId: UUID }): Promise<void> {
-        await this._toggleItemStatus(listId, data.itemId, true);
-    }
-
-    private async applyRemoteDelete(listId: UUID, data: { itemId: UUID }): Promise<void> {
-        await this.repository.removeItemFromList(listId, data.itemId);
-    }
-
-    private async applyRemoteClear(listId: UUID): Promise<void> {
-        const listResult = await this.getList(listId);
-        if (listResult.success && listResult.data) {
-            listResult.data.clearCompleted();
-            await this.repository.update(listId, listResult.data.toJSON());
+            // Subscribe to remote sync events
+            this._syncService.onSync((event: SyncEvent) => {
+                this.handleRemoteEvent(event);
+            });
+            console.log('✅ Subscribed to remote sync events');
+        } catch (error) {
+            console.error('❌ Failed to create syncService:', error);
         }
     }
 
-    private shouldBroadcast(): boolean {
-        return this.syncService !== null && this.syncService.isConnected();
+    /**
+     * Get the sync service instance (for internal use)
+     */
+    private getSyncService(): SyncService | null {
+        return this._syncService;
     }
 
-    // MODIFY THIS METHOD
+    /**
+     * Check if sync is available and connected
+     */
+    private shouldBroadcast(): boolean {
+        const sync = this._syncService;
+        const isConnected = sync !== null && sync.isConnected();
+        console.log('🔍 shouldBroadcast check:', { hasSyncService: !!sync, isConnected });
+        return isConnected;
+    }
+
+    /* ==================== LIST MANAGEMENT ==================== */
+
+    /**
+     * Create a new shopping list with stable ID
+     */
+    public async createList(
+        name: string,
+        ownerId: string,
+        description?: string
+    ): Promise<OperationResult<ShoppingList>> {
+        try {
+            const validation = this.validator.validateNewList(name, ownerId);
+            if (!validation.isValid) {
+                throw new Error(validation.errors.join(', '));
+            }
+
+            const stableId = generateStableUUID(`${ownerId}:shared-shopping-list`);
+
+            // Try to get existing list first
+            const existing = await this.repository.findById(stableId);
+            if (existing.success && existing.data) {
+                this._currentListId = stableId;
+                return {
+                    success: true,
+                    data: new ShoppingList(existing.data)
+                };
+            }
+
+            // Create new with stable ID
+            const result = await this.repository.create({
+                name,
+                description,
+                ownerId,
+                items: [],
+                isArchived: false,
+                sharedWith: []
+            }, stableId);
+
+            if (result.success && result.data) {
+                this._currentListId = stableId;
+                return {
+                    success: true,
+                    data: new ShoppingList(result.data)
+                };
+            }
+
+            return result as OperationResult<ShoppingList>;
+        } catch (error) {
+            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to create shopping list');
+        }
+    }
+
+    /**
+     * Get list by ID (returns model)
+     */
+    public async getList(listId: UUID): Promise<OperationResult<ShoppingList>> {
+        try {
+            const result = await this.repository.findById(listId);
+            if (result.success && result.data) {
+                this._currentListId = listId;
+                return {
+                    success: true,
+                    data: new ShoppingList(result.data)
+                };
+            }
+            return result as OperationResult<ShoppingList>;
+        } catch (error) {
+            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to get list');
+        }
+    }
+
+    /**
+     * Get all active lists for a user (returns models)
+     */
+    public async getUserLists(userId: string): Promise<OperationResult<ShoppingList[]>> {
+        try {
+            const result = await this.repository.findByOwner(userId);
+            if (result.success && result.data) {
+                const lists = result.data
+                    .filter(list => !list.isArchived)
+                    .map(list => new ShoppingList(list));
+                return { success: true, data: lists };
+            }
+            return result as OperationResult<ShoppingList[]>;
+        } catch (error) {
+            return this.errorHandler.handleError<ShoppingList[]>(error, 'Failed to get user lists');
+        }
+    }
+
+    /**
+     * Archive a list (soft delete)
+     */
+    public async archiveList(listId: UUID): Promise<OperationResult<ShoppingList>> {
+        try {
+            const result = await this.repository.update(listId, {
+                isArchived: true,
+                updatedAt: new Date()
+            });
+            if (result.success) {
+                this.errorHandler.logInfo('List archived', { listId });
+            }
+            return this.mapToModelResult(result);
+        } catch (error) {
+            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to archive list');
+        }
+    }
+
+    /* ==================== ITEM MANAGEMENT ==================== */
+
     /**
      * Add item to list (appears at top)
      */
@@ -116,7 +209,6 @@ export class ShoppingListService {
         return this._addItem(listId, itemData, false);
     }
 
-    // ADD THIS PRIVATE METHOD
     private async _addItem(
         listId: UUID,
         itemData: {
@@ -129,6 +221,8 @@ export class ShoppingListService {
         },
         isRemote: boolean
     ): Promise<OperationResult<ShoppingList>> {
+        console.log('📝 _addItem called', { isRemote, listId, itemData });
+
         try {
             const validation = this.validator.validateNewItem(itemData);
             if (!validation.isValid) {
@@ -161,17 +255,21 @@ export class ShoppingListService {
             };
 
             const result = await this.repository.update(listId, updatedList);
-            
+
             if (result.success && result.data) {
                 this.errorHandler.logInfo('Item added to list', { listId, itemId: newItem.id });
-                
+
                 // Broadcast to other devices (unless this is already a remote sync)
-                if (!isRemote && this.shouldBroadcast()) {
-                    this.syncService!.broadcast({
+                const sync = this.getSyncService();
+                if (!isRemote && sync) {
+                    console.log('📤 BROADCASTING ADD_ITEM via sync service');
+                    sync.broadcast({
                         type: 'ADD_ITEM',
                         listId,
                         data: itemData
                     });
+                } else {
+                    console.log('⏭️ NOT broadcasting', { isRemote, hasSync: !!sync });
                 }
             }
 
@@ -181,7 +279,6 @@ export class ShoppingListService {
         }
     }
 
-    // MODIFY THIS METHOD
     /**
      * Toggle item status (complete/incomplete)
      */
@@ -189,7 +286,6 @@ export class ShoppingListService {
         return this._toggleItemStatus(listId, itemId, false);
     }
 
-    // ADD THIS PRIVATE METHOD
     private async _toggleItemStatus(listId: UUID, itemId: UUID, isRemote: boolean): Promise<OperationResult<ShoppingList>> {
         try {
             const listResult = await this.getList(listId);
@@ -199,52 +295,53 @@ export class ShoppingListService {
 
             const list = listResult.data;
             const toggled = list.toggleItemStatus(itemId);
-            
             if (!toggled) {
                 throw new Error('Item not found');
             }
 
             const updateResult = await this.repository.update(listId, list.toJSON());
-            
-            // Broadcast to other devices (unless this is already a remote sync)
-            if (!isRemote && this.shouldBroadcast()) {
-                this.syncService!.broadcast({
-                    type: 'TOGGLE_ITEM',
-                    listId,
-                    data: { itemId }
-                });
+
+            if (!isRemote) {
+                const sync = this.getSyncService();
+                if (sync) {
+                    console.log('📤 BROADCASTING TOGGLE_ITEM');
+                    sync.broadcast({
+                        type: 'TOGGLE_ITEM',
+                        listId,
+                        data: { itemId }
+                    });
+                }
             }
-            
+
             return this.mapToModelResult(updateResult);
         } catch (error) {
             return this.errorHandler.handleError<ShoppingList>(error, 'Failed to toggle item status');
         }
     }
 
-    // MODIFY THIS METHOD
     /**
      * Remove item from list
      */
     public async removeItem(listId: UUID, itemId: UUID): Promise<OperationResult<ShoppingList>> {
         try {
             const result = await this.repository.removeItemFromList(listId, itemId);
-            
-            // Broadcast to other devices
-            if (this.shouldBroadcast()) {
-                this.syncService!.broadcast({
+
+            const sync = this.getSyncService();
+            if (sync) {
+                console.log('📤 BROADCASTING DELETE_ITEM');
+                sync.broadcast({
                     type: 'DELETE_ITEM',
                     listId,
                     data: { itemId }
                 });
             }
-            
+
             return this.mapToModelResult(result);
         } catch (error) {
             return this.errorHandler.handleError<ShoppingList>(error, 'Failed to remove item');
         }
     }
 
-    // MODIFY THIS METHOD
     /**
      * Clear all completed items
      */
@@ -257,19 +354,19 @@ export class ShoppingListService {
 
             const list = listResult.data;
             const clearedCount = list.clearCompleted();
-            
             if (clearedCount === 0) {
                 return { success: true, data: list, message: 'No completed items to clear' };
             }
 
             const updateResult = await this.repository.update(listId, list.toJSON());
-            
+
             if (updateResult.success) {
                 this.errorHandler.logInfo(`Cleared ${clearedCount} completed items`, { listId });
-                
-                // Broadcast to other devices
-                if (this.shouldBroadcast()) {
-                    this.syncService!.broadcast({
+
+                const sync = this.getSyncService();
+                if (sync) {
+                    console.log('📤 BROADCASTING CLEAR_COMPLETED');
+                    sync.broadcast({
                         type: 'CLEAR_COMPLETED',
                         listId,
                         data: null
@@ -285,9 +382,6 @@ export class ShoppingListService {
 
     /* ==================== PRIVATE HELPERS ==================== */
 
-    /**
-     * Convert repository result (interface) to model result
-     */
     private mapToModelResult(result: OperationResult<any>): OperationResult<ShoppingList> {
         if (result.success && result.data) {
             return {
@@ -300,224 +394,35 @@ export class ShoppingListService {
             error: result.error,
             message: result.message
         };
-    }    
-    // REST OF YOUR EXISTING METHODS (createList, getList, getUserLists, archiveList, 
-    // initializeCatalog, searchProducts, getPopularProducts, addCatalogItemToList, 
-    // getListSummary, subscribeToList, mapToModelResult) REMAIN EXACTLY THE SAME
-    // ... (keep all your existing code below this line)
-
-
-    /**
-     * Create a new shopping list
-     */
-    public async createList(
-        name: string, 
-        ownerId: string, 
-        description?: string
-    ): Promise<OperationResult<ShoppingList>> {
-        try {
-        // Validate input
-        const validation = this.validator.validateNewList(name, ownerId);
-        if (!validation.isValid) {
-            throw new Error(validation.errors.join(', '));
-        }
-
-        // Create list with default values
-        const result = await this.repository.create({
-            name,
-            description,
-            ownerId,
-            items: [],
-            isArchived: false,
-            sharedWith: []
-        });
-
-        if (result.success && result.data) {
-            // Convert to model
-            this._currentListId = result.data.id; // Set current list ID
-            const list = new ShoppingList(result.data);
-            return {
-            success: true,
-            data: list
-            };
-        }
-
-        return result as OperationResult<ShoppingList>;
-        } catch (error) {
-        return this.errorHandler.handleError<ShoppingList>(
-            error, 
-            'Failed to create shopping list'
-        );
-        }
     }
 
-    /**
-     * Set the current list ID
-     */
-    public setCurrentList(listId: UUID): void {
-        this._currentListId = listId;
-    }
+    /* ==================== CATALOG OPERATIONS ==================== */
 
-    /**
-     * Get list by ID (returns model)
-     */
-    public async getList(listId: UUID): Promise<OperationResult<ShoppingList>> {
-        try {
-        const result = await this.repository.findById(listId);
-        
-        if (result.success && result.data) {
-            
-            // Update current list ID
-            this._currentListId = listId;
-            const list = new ShoppingList(result.data);
-            return {
-            success: true,
-            data: list
-            };
-        }
-        
-        return result as OperationResult<ShoppingList>;
-        } catch (error) {
-        return this.errorHandler.handleError<ShoppingList>(
-            error, 
-            'Failed to get list'
-        );
-        }
-    }
-
-
-    /**
-     * Get all active lists for a user (returns models)
-     */
-    public async getUserLists(userId: string): Promise<OperationResult<ShoppingList[]>> {
-        try {
-        const result = await this.repository.findByOwner(userId);
-        
-        if (result.success && result.data) {
-            // Filter out archived and convert to models
-            const lists = result.data
-            .filter(list => !list.isArchived)
-            .map(list => new ShoppingList(list));
-            
-            return {
-            success: true,
-            data: lists
-            };
-        }
-
-        return result as OperationResult<ShoppingList[]>;
-        } catch (error) {
-        return this.errorHandler.handleError<ShoppingList[]>(
-            error, 
-            'Failed to get user lists'
-        );
-        }
-    }
-
-    /**
-     * Archive a list (soft delete)
-     */
-    public async archiveList(listId: UUID): Promise<OperationResult<ShoppingList>> {
-        try {
-        const result = await this.repository.update(listId, { 
-            isArchived: true,
-            updatedAt: new Date()
-        });
-
-        if (result.success) {
-            this.errorHandler.logInfo('List archived', { listId });
-        }
-
-        return result as OperationResult<ShoppingList>;
-        } catch (error) {
-        return this.errorHandler.handleError<ShoppingList>(
-            error, 
-            'Failed to archive list'
-        );
-        }
-    }
-
-    /**
-     * Get list summary (uses model method)
-     */
-    public async getListSummary(listId: UUID): Promise<OperationResult<{
-        totalItems: number;
-        completedItems: number;
-        pendingItems: number;
-        estimatedTotal: number;
-        itemsByCategory: Record<string, number>;
-    }>> {
-        try {
-        const listResult = await this.getList(listId);
-        
-        if (!listResult.success || !listResult.data) {
-            throw new Error('List not found');
-        }
-
-        const summary = listResult.data.getSummary();
-
-        return {
-            success: true,
-            data: summary
-        };
-        } catch (error) {
-        return this.errorHandler.handleError(error, 'Failed to get list summary');
-        }
-    }
-
-
-    /**
-     * Subscribe to list changes
-     */
-    public subscribeToList(listId: UUID, callback: (list: ShoppingList) => void): () => void {
-        return this.repository.subscribe((event) => {
-        if (event.data.id === listId) {
-            callback(event.data as ShoppingList);
-        }
-        });
-    }
-
-
-    /**
-     * Initialize catalog (call this when app starts)
-     */
     public async initializeCatalog(): Promise<void> {
         await this.catalogRepository.initializeCatalog();
     }
 
-    /**
-     * Search available products
-     */
     public async searchProducts(query: string): Promise<OperationResult<CatalogProduct[]>> {
         return this.catalogRepository.searchProducts(query);
     }
 
-    /**
-     * Get popular products for quick add
-     */
     public async getPopularProducts(): Promise<OperationResult<CatalogProduct[]>> {
         return this.catalogRepository.getPopularProducts();
     }
 
-    /**
-     * Add item from catalog to list
-     */
     public async addCatalogItemToList(
         listId: UUID,
         catalogProductId: UUID,
         customQuantity?: number
     ): Promise<OperationResult<ShoppingList>> {
         try {
-            // Get product from catalog
             const productResult = await this.catalogRepository.findById(catalogProductId);
             if (!productResult.success || !productResult.data) {
                 throw new Error('Product not found in catalog');
             }
 
             const product = productResult.data;
-
-            // Create shopping list item from catalog product - use INTERFACE type
-            const newItem: IShoppingListItem = {  // ← Use IShoppingListItem, not ShoppingListItem model
+            const newItem: IShoppingListItem = {
                 id: generateId(),
                 catalogProductId: product.id,
                 name: product.name,
@@ -531,26 +436,83 @@ export class ShoppingListService {
                 tags: product.tags || []
             };
 
-            // Add to list - repository expects interface, not model
             const result = await this.repository.addItemToList(listId, newItem);
-            
-            if (result.success && result.data) {
-                // Convert the result to model before returning
-                const listModel = new ShoppingList(result.data);
-                return {
-                    success: true,
-                    data: listModel
-                };
-            }
-
-            return result as unknown as OperationResult<ShoppingList>;
+            return this.mapToModelResult(result);
         } catch (error) {
             return this.errorHandler.handleError(error, 'Failed to add catalog item to list');
         }
     }
 
-    // Getter for currentListId (if needed for UI state management)
+    /* ==================== UTILITY METHODS ==================== */
+
+    public async getListSummary(listId: UUID): Promise<OperationResult<{
+        totalItems: number;
+        completedItems: number;
+        pendingItems: number;
+        estimatedTotal: number;
+        itemsByCategory: Record<string, number>;
+    }>> {
+        try {
+            const listResult = await this.getList(listId);
+            if (!listResult.success || !listResult.data) {
+                throw new Error('List not found');
+            }
+            return {
+                success: true,
+                data: listResult.data.getSummary()
+            };
+        } catch (error) {
+            return this.errorHandler.handleError(error, 'Failed to get list summary');
+        }
+    }
+
+    public subscribeToList(listId: UUID, callback: (list: ShoppingList) => void): () => void {
+        return this.repository.subscribe((event) => {
+            if (event.data.id === listId) {
+                callback(event.data as ShoppingList);
+            }
+        });
+    }
+
+    /* ==================== GETTERS / SETTERS ==================== */
+
+    public setCurrentList(listId: UUID): void {
+        this._currentListId = listId;
+    }
+
     public get currentListId(): UUID | null {
         return this._currentListId;
     }
+
+
+private async applyRemoteAdd(listId: UUID, data: any): Promise<void> {
+    console.log('📨 applyRemoteAdd: adding item remotely', { listId, data });
+    const result = await this._addItem(listId, data, true);
+    if (result.success) {
+        // Force a refresh by notifying subscribers manually? 
+        // The repository should already notify, but just in case:
+        console.log('✅ Remote add successful, UI should update via subscription');
+    } else {
+        console.error('❌ Remote add failed:', result.error);
+    }
+}
+
+/**
+ * Handle incoming remote sync events
+ */
+private async handleRemoteEvent(event: SyncEvent): Promise<void> {
+    console.log('🔄 Handling remote event:', event.type, event);
+    try {
+        switch (event.type) {
+            case 'ADD_ITEM':
+                await this.applyRemoteAdd(event.listId, event.data);
+                break;
+            // TODO: Add cases for UPDATE_ITEM, DELETE_ITEM, etc.
+            default:
+                console.warn('⚠️ Unknown remote event type:', event.type);
+        }
+    } catch (error) {
+        console.error('❌ Error handling remote event:', error);
+    }
+}
 }

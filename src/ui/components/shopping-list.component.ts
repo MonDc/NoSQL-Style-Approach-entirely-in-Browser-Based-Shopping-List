@@ -9,6 +9,7 @@ import {
 import { ListItemComponent, ListItemCallbacks } from './list-item.component';
 import { AddItemFormComponent } from './add-item-form.component';
 import { SwipeableGrid } from './swipeable-grid/swipeable-grid.component';
+import { generateStableUUID } from '../../utils/id-generator.util';
 
 /**
  * Main shopping list component [Manages DOM element references to avoid repeated queries]
@@ -65,17 +66,17 @@ export class ShoppingListComponent {
     // Constants
     private readonly DEBOUNCE_DELAY = 150;
 
-    constructor(containerId: string) {
+    constructor(containerId: string, service: ShoppingListService) {
         const container = document.getElementById(containerId);
         if (!container) {
             throw new Error(`Container element with id '${containerId}' not found`);
         }
         this.container = container;
-        this.service = new ShoppingListService();
-        this.catalogRepo = new CatalogRepository();
-        
+        this.service = service;                 // 👈 use passed service
+        this.catalogRepo = new CatalogRepository(); // catalog repo can stay separate
         this.initialize();
     }
+
 
     /**
      * Initialize the component
@@ -159,31 +160,31 @@ export class ShoppingListComponent {
     /**
      * Create or get today's shopping list
      */
-private async ensureListExists(): Promise<void> {
-    const lists = await this.service.getUserLists('demo-user');
-    console.log('📋 User lists:', lists); // ADD THIS
+    private async ensureListExists(): Promise<void> {
+    const stableId = generateStableUUID('demo-user:shared-shopping-list');
     
-    if (lists.success && lists.data && lists.data.length > 0) {
-        this.currentListId = lists.data[0].id;
-        this.currentList = lists.data[0];
-        // Tell the service about this list ID
-        this.service.setCurrentList(this.currentListId); // ADD THIS
-        console.log('📋 Using existing list:', this.currentListId);
+    // Try to get the stable list
+    const listResult = await this.service.getList(stableId as UUID);
+    
+    if (listResult.success && listResult.data) {
+        this.currentListId = stableId as UUID;
+        this.currentList = listResult.data;
+        this.service.setCurrentList(this.currentListId);
+        console.log('📋 Using stable shared list:', this.currentListId);
     } else {
+        // Create new list with stable ID
         const newList = await this.service.createList(
-            `Shopping List ${new Date().toLocaleDateString()}`,
-            'demo-user'
+        'Shared Shopping List',
+        'demo-user'
         );
         
         if (newList.success && newList.data) {
-            this.currentListId = newList.data.id;
-            this.currentList = newList.data;
-            // createList should already set it, but just in case
-            this.service.setCurrentList(this.currentListId); // ADD THIS
-            console.log('🆕 Created new list:', this.currentListId);
+        this.currentListId = newList.data.id;
+        this.currentList = newList.data;
+        console.log('🆕 Created stable shared list:', this.currentListId);
         }
     }
-}
+    }
 
     /**
  * Render the main layout structure - NO BOTTOM BUTTONS
@@ -373,6 +374,7 @@ private async ensureListExists(): Promise<void> {
      * Update list UI with current data
      */
     private updateListUI(): void {
+        console.log('🔄 updateListUI called', { currentList: this.currentList });
         if (!this.currentList) return;
         
         // Update title (empty since we only show icon)
@@ -710,13 +712,17 @@ private async ensureListExists(): Promise<void> {
      */
     private subscribeToListUpdates(): void {
         if (!this.currentListId) return;
-        
+        console.log('🔔 Subscribing to list updates for', this.currentListId);
         this.unsubscribe = this.service.subscribeToList(this.currentListId, (updatedList) => {
-            this.currentList = updatedList;
-            this.updateListUI();
+            console.log('📢 List updated via subscription!', updatedList);
+            try {
+                this.currentList = updatedList;
+                this.updateListUI();
+            } catch (error) {
+                console.error('❌ Error updating UI after subscription:', error);
+            }
         });
     }
-
     /**
      * Archive current list
      */
