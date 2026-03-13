@@ -36,8 +36,15 @@ export class ShoppingListService {
         this.clientId = this.generateClientId();
     }
 
-    /* ==================== SYNC METHODS ==================== */
 
+
+
+
+
+
+
+
+    
     private generateClientId(): string {
         return 'client_' + Math.random().toString(36).substr(2, 9);
     }
@@ -71,16 +78,6 @@ export class ShoppingListService {
      */
     private getSyncService(): SyncService | null {
         return this._syncService;
-    }
-
-    /**
-     * Check if sync is available and connected
-     */
-    private shouldBroadcast(): boolean {
-        const sync = this._syncService;
-        const isConnected = sync !== null && sync.isConnected();
-        console.log('🔍 shouldBroadcast check:', { hasSyncService: !!sync, isConnected });
-        return isConnected;
     }
 
     /* ==================== LIST MANAGEMENT ==================== */
@@ -484,35 +481,34 @@ export class ShoppingListService {
         return this._currentListId;
     }
 
-
-private async applyRemoteAdd(listId: UUID, data: any): Promise<void> {
-    console.log('📨 applyRemoteAdd: adding item remotely', { listId, data });
-    const result = await this._addItem(listId, data, true);
-    if (result.success) {
-        // Force a refresh by notifying subscribers manually? 
-        // The repository should already notify, but just in case:
-        console.log('✅ Remote add successful, UI should update via subscription');
-    } else {
-        console.error('❌ Remote add failed:', result.error);
-    }
-}
-
-/**
- * Handle incoming remote sync events
- */
-private async handleRemoteEvent(event: SyncEvent): Promise<void> {
-    console.log('🔄 Handling remote event:', event.type, event);
-    try {
-        switch (event.type) {
-            case 'ADD_ITEM':
-                await this.applyRemoteAdd(event.listId, event.data);
-                break;
-            // TODO: Add cases for UPDATE_ITEM, DELETE_ITEM, etc.
-            default:
-                console.warn('⚠️ Unknown remote event type:', event.type);
+    private async applyRemoteAdd(listId: UUID, data: any): Promise<void> {
+        console.log('📨 applyRemoteAdd: adding item remotely', { listId, data });
+        const result = await this._addItem(listId, data, true);
+        if (result.success) {
+            // Force a refresh by notifying subscribers manually? 
+            // The repository should already notify, but just in case:
+            console.log('✅ Remote add successful, UI should update via subscription');
+        } else {
+            console.error('❌ Remote add failed:', result.error);
         }
-    } catch (error) {
-        console.error('❌ Error handling remote event:', error);
     }
-}
+
+    /**
+     * Handle incoming remote sync events
+     */
+    private async handleRemoteEvent(event: SyncEvent): Promise<void> {
+        console.log('🔄 Handling remote event:', event.type, event);
+        try {
+            switch (event.type) {
+                case 'ADD_ITEM':
+                    await this.applyRemoteAdd(event.listId, event.data);
+                    break;
+                // TODO: Add cases for UPDATE_ITEM, DELETE_ITEM, etc.
+                default:
+                    console.warn('⚠️ Unknown remote event type:', event.type);
+            }
+        } catch (error) {
+            console.error('❌ Error handling remote event:', error);
+        }
+    }
 }
