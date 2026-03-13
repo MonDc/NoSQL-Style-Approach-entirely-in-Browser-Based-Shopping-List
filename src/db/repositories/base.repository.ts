@@ -36,17 +36,14 @@ export abstract class BaseRepository<T extends { id: UUID }, Schema> {
    * @returns OperationResult with created entity
    * @example const result = await repo.create({ name: "Milk", price: 2.99 });
    */
-  public async create(
-    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
-    fixedId?: UUID
-  ): Promise<OperationResult<T>> {
+  public async create(data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>): Promise<OperationResult<T>> {
     try {
       const db = await this.getDb();
       
       const now = new Date();
       const newItem = {
         ...data,
-        id: fixedId || crypto.randomUUID() as UUID,
+        id: crypto.randomUUID() as UUID,
         createdAt: now,
         updatedAt: now,
       };
@@ -247,13 +244,12 @@ export abstract class BaseRepository<T extends { id: UUID }, Schema> {
       await store.put(updated as any); // Cast updated to any
       await tx.done;
 
-this.notifySubscribers({
-    type: DataEventType.UPDATED,
-    data: updated,
-    timestamp: new Date(),
-    source: this.storeName
-});
-console.log('🔔 Repository notified subscribers for update', updated.id);
+      this.notifySubscribers({
+        type: DataEventType.UPDATED,
+        data: updated as T,
+        timestamp: new Date(),
+        source: this.storeName
+      });
 
       return { success: true, data: updated as T };
     } catch (error) {

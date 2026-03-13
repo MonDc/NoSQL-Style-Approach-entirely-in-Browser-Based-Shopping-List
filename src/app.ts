@@ -20,12 +20,8 @@ class ShoppingListApp {
     this.listService = new ShoppingListService();
     this.errorHandler = ErrorHandler.getInstance();
     
-    // ENABLE SYNC BEFORE CREATING COMPONENT - THIS IS THE KEY CHANGE
-    const PI_IP = '192.168.178.21'; // Your Pi's actual IP
-    this.listService.enableSync(`ws://${PI_IP}:8080`);
-    
-    // Create main UI component (mounts to #app) - NOW SYNC IS ALREADY ENABLED
-    this.listComponent = new ShoppingListComponent('app', this.listService);
+    // Create main UI component (mounts to #app)
+    this.listComponent = new ShoppingListComponent('app');
   }
 
   /**
@@ -89,11 +85,6 @@ class ShoppingListApp {
         }
       } else {
         this.errorHandler.logInfo('Existing lists found', { count: lists.data.length });
-        
-        // Make sure the service knows the current list ID
-        if (lists.data[0]) {
-          this.listService.setCurrentList(lists.data[0].id);
-        }
       }
     } catch (error) {
       this.errorHandler.handleError(error, 'Failed to ensure demo data');
