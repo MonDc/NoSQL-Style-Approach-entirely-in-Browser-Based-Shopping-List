@@ -20,8 +20,12 @@ class ShoppingListApp {
     this.listService = new ShoppingListService();
     this.errorHandler = ErrorHandler.getInstance();
     
-    // Create main UI component (mounts to #app)
-    this.listComponent = new ShoppingListComponent('app');
+    // Enable sync (replace with your actual server URL [PI-IP])
+    const SERVER_URL = 'ws://192.168.178.21:8080'; // Update this to your relay server
+    this.listService.enableSync(SERVER_URL);
+    
+    // Create main UI component (mounts to #app) - pass the shared service
+    this.listComponent = new ShoppingListComponent('app', this.listService);
   }
 
   /**

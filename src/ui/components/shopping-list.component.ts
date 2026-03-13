@@ -65,17 +65,70 @@ export class ShoppingListComponent {
     // Constants
     private readonly USER_ID = 'demo-user';
     private readonly DEBOUNCE_DELAY = 150;
+    private syncStatusElement: HTMLElement | null = null;
 
-    constructor(containerId: string) {
+    constructor(containerId: string, service?: ShoppingListService) {
         const container = document.getElementById(containerId);
         if (!container) {
             throw new Error(`Container element with id '${containerId}' not found`);
         }
         this.container = container;
-        this.service = new ShoppingListService();
+        this.service = service || new ShoppingListService();
         this.catalogRepo = new CatalogRepository();
         
         this.initialize();
+    }
+
+
+
+
+
+
+
+
+
+
+    // Add to render() method, maybe after the search section
+    private renderSyncIndicator(): string {
+        return `
+            <div class="sync-status" style="
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-bottom: 10px;
+                padding: 8px 12px;
+                background: #f0f0f0;
+                border-radius: 20px;
+                font-size: 12px;
+                color: #666;
+            ">
+                <span class="sync-dot" style="
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    background: #f44336;
+                    transition: background 0.3s;
+                "></span>
+                <span class="sync-text">Connecting...</span>
+            </div>
+        `;
+    }
+
+    // Call this after enabling sync
+    public updateSyncStatus(connected: boolean, clientCount?: number): void {
+        if (!this.syncStatusElement) {
+            this.syncStatusElement = document.querySelector('.sync-status');
+        }
+        
+        const dot = this.syncStatusElement?.querySelector('.sync-dot') as HTMLElement;
+        const text = this.syncStatusElement?.querySelector('.sync-text') as HTMLElement;
+        
+        if (dot && text) {
+            dot.style.background = connected ? '#4CAF50' : '#f44336';
+            text.textContent = connected 
+                ? `🟢 Live (${clientCount || 1} device${clientCount !== 1 ? 's' : ''})` 
+                : '🔴 Connecting...';
+        }
     }
 
     /**
@@ -157,21 +210,14 @@ export class ShoppingListComponent {
      * Create or get today's shopping list
      */
     private async ensureListExists(): Promise<void> {
-        const lists = await this.service.getUserLists(this.USER_ID);
+        const sharedList = await this.service.getSharedList();
         
-        if (lists.success && lists.data && lists.data.length > 0) {
-            this.currentListId = lists.data[0].id;
-            this.currentList = lists.data[0];
+        if (sharedList.success && sharedList.data) {
+            this.currentListId = sharedList.data.id;
+            this.currentList = sharedList.data;
+            console.log('📋 Using shared list:', this.currentListId);
         } else {
-            const newList = await this.service.createList(
-                `Shopping List ${new Date().toLocaleDateString()}`,
-                this.USER_ID
-            );
-            
-            if (newList.success && newList.data) {
-                this.currentListId = newList.data.id;
-                this.currentList = newList.data;
-            }
+            console.error('❌ Failed to get shared list');
         }
     }
 
@@ -426,11 +472,11 @@ export class ShoppingListComponent {
         return {
             onToggle: async (itemId: UUID) => {
                 if (!this.currentListId) return;
-                await this.service.repository.toggleItemStatus(this.currentListId, itemId);
+                await this.service.toggleItemStatus(this.currentListId, itemId);
             },
             onDelete: async (itemId: UUID) => {
                 if (!this.currentListId) return;
-                await this.service.repository.removeItemFromList(this.currentListId, itemId);
+                await this.service.deleteItem(this.currentListId, itemId);
             }
         };
     }
