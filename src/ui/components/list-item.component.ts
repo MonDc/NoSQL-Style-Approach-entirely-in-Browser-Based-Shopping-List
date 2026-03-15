@@ -32,7 +32,7 @@ export class ListItemComponent {
 
 
 
-    
+
     public render(): HTMLElement {
         const div = document.createElement('div');
         div.className = 'list-item';
@@ -114,86 +114,117 @@ export class ListItemComponent {
 
     private renderEditMode(): string {
         return `
-            <div class="item-content" style="
-                position: relative;
-                background: white;
-                padding: 16px;
-                border: 2px solid #4CAF50;
-                border-radius: 12px;
-                box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
-            ">
-                <input 
-                    type="text" 
-                    class="edit-name" 
-                    value="${this.item.name}"
-                    style="
-                        width: 100%;
-                        padding: 8px 0;
-                        font-size: 16px;
-                        font-weight: 600;
-                        border: none;
-                        border-bottom: 2px solid #4CAF50;
-                        outline: none;
-                        background: transparent;
-                        margin-bottom: 12px;
-                    "
-                    placeholder="Item name"
-                />
-                
-                <div style="display: flex; gap: 12px; align-items: center;">
-                    <div style="flex: 0 0 100px;">
-                        <input 
-                            type="number" 
-                            class="edit-quantity" 
-                            value="${this.item.quantity}"
-                            min="0.1"
-                            step="0.1"
-                            style="
-                                width: 100%;
-                                padding: 8px;
-                                border: 1px solid #ddd;
-                                border-radius: 8px;
-                                font-size: 14px;
-                            "
-                        />
-                    </div>
+            <div style="position: relative;">
+                <!-- Original view mode (hidden but maintains dimensions) -->
+                <div class="item-content" style="
+                    position: relative;
+                    background: white;
+                    padding: 16px;
+                    display: flex;
+                    align-items: center;
+                    border: 1px solid #eee;
+                    border-radius: 12px;
+                    opacity: 0.3;
+                    pointer-events: none;
+                ">
+                    <!-- Toggle button -->
+                    <div style="
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 50%;
+                        border: 2px solid ${this.item.status === 'completed' ? '#4CAF50' : '#ddd'};
+                        background: ${this.item.status === 'completed' ? '#4CAF50' : 'transparent'};
+                        margin-right: 12px;
+                        flex-shrink: 0;
+                    ">${this.item.status === 'completed' ? '✓' : ''}</div>
                     
-                    <select class="edit-unit" style="
-                        flex: 1;
-                        padding: 8px;
-                        border: 1px solid #ddd;
-                        border-radius: 8px;
-                        font-size: 14px;
-                        background: white;
-                    ">
-                        <option value="piece" ${this.item.unit === Unit.PIECE ? 'selected' : ''}>piece</option>
-                        <option value="kg" ${this.item.unit === Unit.KILOGRAM ? 'selected' : ''}>kg</option>
-                        <option value="g" ${this.item.unit === Unit.GRAM ? 'selected' : ''}>g</option>
-                        <option value="liter" ${this.item.unit === Unit.LITER ? 'selected' : ''}>liter</option>
-                        <option value="ml" ${this.item.unit === Unit.MILLILITER ? 'selected' : ''}>ml</option>
-                    </select>
+                    <!-- Item details -->
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 600;">${this.item.name}</div>
+                        <div style="font-size: 12px; color: #666;">
+                            📦 ${this.item.quantity} ${this.item.unit}
+                        </div>
+                    </div>
                 </div>
                 
-                <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
-                    <button class="save-edit" style="
-                        background: #4CAF50;
-                        color: white;
-                        border: none;
-                        padding: 8px 20px;
-                        border-radius: 20px;
-                        cursor: pointer;
-                        font-size: 14px;
-                        font-weight: 500;
-                    ">Save</button>
-                    <button class="cancel-edit" style="
-                        background: #f0f0f0;
-                        color: #666;
-                        border: none;
-                        padding: 8px 20px;
-                        border-radius: 20px;
-                        cursor: pointer;
-                        font-size: 14px;
-                    ">Cancel</button>
+                <!-- Edit overlay - exactly same position and size -->
+                <div class="item-content" style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    right: 0;
+                    bottom: 0;
+                    background: white;
+                    padding: 16px;
+                    display: flex;
+                    align-items: center;
+                    border: 1px solid #4CAF50; /* Changed from 2px to 1px */
+                    border-radius: 12px;
+                    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+                    z-index: 10;
+                ">
+                    <!-- Toggle placeholder (same size) -->
+                    <div style="
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 50%;
+                        border: 2px solid #ddd;
+                        background: transparent;
+                        margin-right: 12px;
+                        flex-shrink: 0;
+                    "></div>
+                    
+                    <!-- Edit fields -->
+                    <div style="flex: 1; min-width: 0;">
+                        <input 
+                            type="text" 
+                            class="edit-name" 
+                            value="${this.item.name}"
+                            style="
+                                width: 100%;
+                                font-weight: 600;
+                                font-size: 16px;
+                                border: none;
+                                border-bottom: 1px solid #4CAF50;
+                                outline: none;
+                                background: transparent;
+                                padding: 0;
+                                margin: 0;
+                                line-height: 1.4;
+                                color: #333;
+                            "
+                        />
+                        <div style="font-size: 12px; color: #666; display: flex; gap: 8px; margin-top: 4px;">
+                            <span>📦</span>
+                            <input 
+                                type="number" 
+                                class="edit-quantity" 
+                                value="${this.item.quantity}"
+                                min="0.1"
+                                step="0.1"
+                                style="
+                                    width: 50px;
+                                    padding: 2px 4px;
+                                    border: 1px solid #ddd;
+                                    border-radius: 4px;
+                                    font-size: 12px;
+                                "
+                            />
+                            <select class="edit-unit" style="
+                                padding: 2px 4px;
+                                border: 1px solid #ddd;
+                                border-radius: 4px;
+                                font-size: 12px;
+                                background: white;
+                            ">
+                                <option value="piece" ${this.item.unit === Unit.PIECE ? 'selected' : ''}>piece</option>
+                                <option value="kg" ${this.item.unit === Unit.KILOGRAM ? 'selected' : ''}>kg</option>
+                                <option value="g" ${this.item.unit === Unit.GRAM ? 'selected' : ''}>g</option>
+                                <option value="liter" ${this.item.unit === Unit.LITER ? 'selected' : ''}>liter</option>
+                                <option value="ml" ${this.item.unit === Unit.MILLILITER ? 'selected' : ''}>ml</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
