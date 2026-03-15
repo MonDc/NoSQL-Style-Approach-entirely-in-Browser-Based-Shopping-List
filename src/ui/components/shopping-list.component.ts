@@ -271,24 +271,24 @@ private async loadInitialData(): Promise<void> {
     /**
      * Render search section with SVG background
      */
-private renderSearchSection(): string {
-    return `
-        <div id="search-section-container" style="position: relative; margin-bottom: 24px;">
-            <!-- Background will be injected here via BackgroundLogo component -->
-            
-            <!-- Letter strip container -->
-            <div id="tomato-strip-container" style="
-                width: 100%;
-                height: 80px;
-                margin: 0 0 15px 0;
-                position: relative;
-                z-index: 1;
-            "></div>
-            
-            <div class="search-results" style="position: relative; z-index: 1; margin-top: 12px;"></div>
-        </div>
-    `;
-}
+    private renderSearchSection(): string {
+        return `
+            <div id="search-section-container" style="position: relative; margin-bottom: 24px;">
+                <!-- Background will be injected here via BackgroundLogo component -->
+                
+                <!-- Letter strip container -->
+                <div id="tomato-strip-container" style="
+                    width: 100%;
+                    height: 80px;
+                    margin: 0 0 15px 0;
+                    position: relative;
+                    z-index: 1;
+                "></div>
+                
+                <div class="search-results" style="position: relative; z-index: 1; margin-top: 12px;"></div>
+            </div>
+        `;
+    }
     /**
      * Render featured items section - swipeable grid
      */
@@ -533,6 +533,21 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
             onDelete: async (itemId: UUID) => {
                 if (!this.currentListId) return;
                 await this.service.repository.removeItemFromList(this.currentListId, itemId);
+            },
+            onUpdate: async (itemId: UUID, newName: string) => {
+                if (!this.currentListId || !this.currentList) return;
+                
+                // Find and update the item
+                const item = this.currentList.items.find(i => i.id === itemId);
+                if (item) {
+                    item.name = newName;
+                    item.updatedAt = new Date();
+                    
+                    // Save to repository
+                    await this.service.repository.update(this.currentListId, {
+                        items: this.currentList.items
+                    });
+                }
             }
         };
     }
