@@ -47,10 +47,31 @@ export class ListItemComponent {
             transition: opacity 0.3s ease, transform 0.3s ease;
         `;
 
+        // Always render the view mode content first
+        div.innerHTML = this.renderViewMode();
+
+        // If in edit mode, add the overlay on top
         if (this.isEditing) {
-            div.innerHTML = this.renderEditMode();
-        } else {
-            div.innerHTML = this.renderViewMode();
+            const overlay = document.createElement('div');
+            overlay.className = 'edit-overlay';
+            overlay.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 10;
+                pointer-events: auto;
+            `;
+            overlay.innerHTML = this.renderEditOverlay();
+            div.appendChild(overlay);
+
+            // Make the original content semi-transparent to preserve layout
+            const itemContent = div.querySelector('.item-content') as HTMLElement;
+            if (itemContent) {
+                itemContent.style.opacity = '0.3';
+                itemContent.style.pointerEvents = 'none';
+            }
         }
         
         return div;
@@ -112,118 +133,83 @@ export class ListItemComponent {
         `;
     }
 
-    private renderEditMode(): string {
+    private renderEditOverlay(): string {
         return `
-            <div style="position: relative;">
-                <!-- Original view mode (hidden but maintains dimensions) -->
-                <div class="item-content" style="
-                    position: relative;
-                    background: white;
-                    padding: 16px;
-                    display: flex;
-                    align-items: center;
-                    border: 1px solid #eee;
-                    border-radius: 12px;
-                    opacity: 0.3;
-                    pointer-events: none;
-                ">
-                    <!-- Toggle button -->
-                    <div style="
-                        width: 32px;
-                        height: 32px;
-                        border-radius: 50%;
-                        border: 2px solid ${this.item.status === 'completed' ? '#4CAF50' : '#ddd'};
-                        background: ${this.item.status === 'completed' ? '#4CAF50' : 'transparent'};
-                        margin-right: 12px;
-                        flex-shrink: 0;
-                    ">${this.item.status === 'completed' ? '✓' : ''}</div>
-                    
-                    <!-- Item details -->
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 600;">${this.item.name}</div>
-                        <div style="font-size: 12px; color: #666;">
-                            📦 ${this.item.quantity} ${this.item.unit}
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Edit overlay - exactly same position and size -->
-                <div class="item-content" style="
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: white;
-                    padding: 16px;
-                    display: flex;
-                    align-items: center;
-                    border: 1px solid #4CAF50; /* Changed from 2px to 1px */
-                    border-radius: 12px;
-                    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
-                    z-index: 10;
-                ">
-                    <!-- Toggle placeholder (same size) -->
-                    <div style="
-                        width: 32px;
-                        height: 32px;
-                        border-radius: 50%;
-                        border: 2px solid #ddd;
-                        background: transparent;
-                        margin-right: 12px;
-                        flex-shrink: 0;
-                    "></div>
-                    
-                    <!-- Edit fields -->
-                    <div style="flex: 1; min-width: 0;">
-                        <input 
-                            type="text" 
-                            class="edit-name" 
-                            value="${this.item.name}"
+            <div class="item-content edit-mode" style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: white;
+                padding: 16px;
+                display: flex;
+                align-items: center;
+                border: 2px solid #2196F3;
+                border-radius: 12px;
+                box-shadow: 0 4px 12px rgba(76, 175, 80, 0.2);
+                z-index: 10;
+            ">
+                <!-- Toggle placeholder (same size as original) -->
+                <div style="
+                    width: 32px;
+                    height: 32px;
+                    border-radius: 50%;
+                    border: 2px solid #ddd;
+                    background: transparent;
+                    margin-right: 12px;
+                    flex-shrink: 0;
+                "></div>
+
+                <!-- Edit fields -->
+                <div style="flex: 1; min-width: 0;">
+                    <input
+                        type="text"
+                        class="edit-name"
+                        value="${this.item.name}"
+                        style="
+                            width: 100%;
+                            font-weight: 600;
+                            font-size: 16px;
+                            border: none;
+                            border-bottom: 1px solid #2196F3;
+                            outline: none;
+                            background: transparent;
+                            padding: 0;
+                            margin: 0;
+                            line-height: 1.4;
+                            color: #333;
+                        "
+                    />
+                    <div style="font-size: 12px; color: #666; display: flex; gap: 8px; margin-top: 4px;">
+                        <span>📦</span>
+                        <input
+                            type="number"
+                            class="edit-quantity"
+                            value="${this.item.quantity}"
+                            min="0.1"
+                            step="0.1"
                             style="
-                                width: 100%;
-                                font-weight: 600;
-                                font-size: 16px;
-                                border: none;
-                                border-bottom: 1px solid #4CAF50;
-                                outline: none;
-                                background: transparent;
-                                padding: 0;
-                                margin: 0;
-                                line-height: 1.4;
-                                color: #333;
-                            "
-                        />
-                        <div style="font-size: 12px; color: #666; display: flex; gap: 8px; margin-top: 4px;">
-                            <span>📦</span>
-                            <input 
-                                type="number" 
-                                class="edit-quantity" 
-                                value="${this.item.quantity}"
-                                min="0.1"
-                                step="0.1"
-                                style="
-                                    width: 50px;
-                                    padding: 2px 4px;
-                                    border: 1px solid #ddd;
-                                    border-radius: 4px;
-                                    font-size: 12px;
-                                "
-                            />
-                            <select class="edit-unit" style="
+                                width: 50px;
                                 padding: 2px 4px;
                                 border: 1px solid #ddd;
                                 border-radius: 4px;
                                 font-size: 12px;
-                                background: white;
-                            ">
-                                <option value="piece" ${this.item.unit === Unit.PIECE ? 'selected' : ''}>piece</option>
-                                <option value="kg" ${this.item.unit === Unit.KILOGRAM ? 'selected' : ''}>kg</option>
-                                <option value="g" ${this.item.unit === Unit.GRAM ? 'selected' : ''}>g</option>
-                                <option value="liter" ${this.item.unit === Unit.LITER ? 'selected' : ''}>liter</option>
-                                <option value="ml" ${this.item.unit === Unit.MILLILITER ? 'selected' : ''}>ml</option>
-                            </select>
-                        </div>
+                            "
+                        />
+                        <select class="edit-unit" style="
+                            padding: 2px 4px;
+                            border: 1px solid #ddd;
+                            border-radius: 4px;
+                            font-size: 12px;
+                            background: white;
+                        ">
+                            <option value="piece" ${this.item.unit === Unit.PIECE ? 'selected' : ''}>piece</option>
+                            <option value="kg" ${this.item.unit === Unit.KILOGRAM ? 'selected' : ''}>kg</option>
+                            <option value="g" ${this.item.unit === Unit.GRAM ? 'selected' : ''}>g</option>
+                            <option value="liter" ${this.item.unit === Unit.LITER ? 'selected' : ''}>liter</option>
+                            <option value="ml" ${this.item.unit === Unit.MILLILITER ? 'selected' : ''}>ml</option>
+                        </select>
                     </div>
                 </div>
             </div>
