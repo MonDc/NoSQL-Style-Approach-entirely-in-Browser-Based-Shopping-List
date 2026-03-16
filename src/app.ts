@@ -1,4 +1,7 @@
 // app.ts
+
+/// <reference types="vite/client" />
+
 import { DatabaseService } from './db/database.service';
 import { ShoppingListService } from './services/shopping-list.service';
 import { ShoppingListComponent } from './ui/components/shopping-list.component';
