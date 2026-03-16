@@ -1,4 +1,5 @@
 import { ShoppingListItem, UUID, Unit } from '../../types/shopping-list.types';
+import { editModeBus } from '../../utils/event-bus';
 import { SwipeDetector, SwipeCallbacks } from './swipeable-grid/swipe-detector';
 
 export interface ListItemCallbacks {
@@ -16,10 +17,20 @@ export class ListItemComponent {
     private contentElement: HTMLElement | null = null;
     private isEditing: boolean = false;
     private documentClickHandler: ((e: MouseEvent) => void) | null = null;
+    private longPressTimer: number | null = null;
+    private readonly LONG_PRESS_DURATION = 500; // 500ms
+    private unsubscribeFromBus: (() => void) | null = null;
 
     constructor(item: ShoppingListItem, callbacks: ListItemCallbacks) {
         this.item = item;
         this.callbacks = callbacks;
+        // Listen for other items starting edit
+        this.unsubscribeFromBus = editModeBus.onEditStart(() => {
+            if (this.isEditing) {
+                this.saveEdit(); // Or cancelEdit() based on preference
+            }
+        });
+    
         this.element = this.render();
         this.attachEvents();
     }
@@ -133,6 +144,25 @@ export class ListItemComponent {
         `;
     }
 
+    // Add this method to handle long press start
+    private handleTouchStart(): void {
+        if (this.isEditing || this.isProcessing) return;
+        
+        // Start timer for long press
+        this.longPressTimer = window.setTimeout(() => {
+            this.enterEditMode();
+            this.longPressTimer = null;
+        }, this.LONG_PRESS_DURATION);
+    }
+
+    // Add this to cancel long press on move/end
+    private cancelLongPress(): void {
+        if (this.longPressTimer) {
+            clearTimeout(this.longPressTimer);
+            this.longPressTimer = null;
+        }
+    }
+
     private renderEditOverlay(): string {
         return `
             <div class="item-content edit-mode" style="
@@ -226,16 +256,38 @@ export class ListItemComponent {
             this.handleToggle();
         });
 
+                    const details = this.element.querySelector('.item-details');
         // Double-click on details to edit (only if not in edit mode)
         if (!this.isEditing) {
-            const details = this.element.querySelector('.item-details');
-            details?.addEventListener('dblclick', (e) => {
+
+            details?.addEventListener('dblclick', (e: MouseEvent) => {
                 e.stopPropagation();
                 this.enterEditMode();
             });
         }
 
-        // Edit mode events
+        // Add touch events for long press
+        details?.addEventListener('touchstart', (e: TouchEvent) => {
+            e.stopPropagation();
+            this.handleTouchStart();
+        });        
+                
+
+        details?.addEventListener('touchmove', () => {
+            // Cancel long press if user starts scrolling
+            this.cancelLongPress();
+        });
+
+        details?.addEventListener('touchend', () => {
+            // Cancel long press if they lift finger before timer completes
+            this.cancelLongPress();
+        });
+
+        details?.addEventListener('touchcancel', () => {
+            this.cancelLongPress();
+        });
+
+                // Edit mode events
         if (this.isEditing) {
             const nameInput = this.element.querySelector('.edit-name') as HTMLInputElement;
             const saveBtn = this.element.querySelector('.save-edit');
@@ -299,7 +351,11 @@ export class ListItemComponent {
     }
 
     private enterEditMode(): void {
-        if (this.isProcessing) return;
+        if (this.isProcessing || this.isEditing) return;
+        
+        // Notify all other items that we're starting edit
+        editModeBus.emitEditStart();
+        
         this.isEditing = true;
         this.reRender();
     }
@@ -427,6 +483,10 @@ export class ListItemComponent {
     }
 
     public destroy(): void {
+        if (this.unsubscribeFromBus) {
+            this.unsubscribeFromBus();
+        }
+
         if (this.documentClickHandler) {
             document.removeEventListener('click', this.documentClickHandler);
         }
