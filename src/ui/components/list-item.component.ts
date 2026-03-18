@@ -144,25 +144,6 @@ export class ListItemComponent {
         `;
     }
 
-    // Add this method to handle long press start
-    private handleTouchStart(): void {
-        if (this.isEditing || this.isProcessing) return;
-        
-        // Start timer for long press
-        this.longPressTimer = window.setTimeout(() => {
-            this.enterEditMode();
-            this.longPressTimer = null;
-        }, this.LONG_PRESS_DURATION);
-    }
-
-    // Add this to cancel long press on move/end
-    private cancelLongPress(): void {
-        if (this.longPressTimer) {
-            clearTimeout(this.longPressTimer);
-            this.longPressTimer = null;
-        }
-    }
-
     private renderEditOverlay(): string {
         return `
             <div class="item-content edit-mode" style="
@@ -249,6 +230,7 @@ export class ListItemComponent {
     private attachEvents(): void {
         this.contentElement = this.element.querySelector('.item-content') as HTMLElement;
         const toggleBtn = this.element.querySelector('.toggle-btn') as HTMLButtonElement;
+        const details = this.element.querySelector('.item-details');
 
         // Toggle button click
         toggleBtn?.addEventListener('click', (e) => {
@@ -256,89 +238,118 @@ export class ListItemComponent {
             this.handleToggle();
         });
 
-                    const details = this.element.querySelector('.item-details');
-        // Double-click on details to edit (only if not in edit mode)
-        if (!this.isEditing) {
-
-            details?.addEventListener('dblclick', (e: MouseEvent) => {
-                e.stopPropagation();
-                this.enterEditMode();
-            });
-        }
-
-        // Add touch events for long press
-        details?.addEventListener('touchstart', (e: TouchEvent) => {
+        // Double-click on details to edit (desktop)
+        details?.addEventListener('dblclick', (e: MouseEvent) => {
             e.stopPropagation();
-            this.handleTouchStart();
-        });        
-                
-
-        details?.addEventListener('touchmove', () => {
-            // Cancel long press if user starts scrolling
-            this.cancelLongPress();
+            this.enterEditMode();
         });
 
-        details?.addEventListener('touchend', () => {
-            // Cancel long press if they lift finger before timer completes
-            this.cancelLongPress();
-        });
-
-        details?.addEventListener('touchcancel', () => {
-            this.cancelLongPress();
-        });
-
-                // Edit mode events
+        // EDIT MODE EVENTS
         if (this.isEditing) {
             const nameInput = this.element.querySelector('.edit-name') as HTMLInputElement;
-            const saveBtn = this.element.querySelector('.save-edit');
-            const cancelBtn = this.element.querySelector('.cancel-edit');
+            // @ts-ignore
+            const quantityInput = this.element.querySelector('.edit-quantity') as HTMLInputElement;
+            // @ts-ignore
+            const unitSelect = this.element.querySelector('.edit-unit') as HTMLSelectElement;
             
-            // Save on Enter
             nameInput?.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     this.saveEdit();
                 }
             });
-
-            // Save on button click
-            saveBtn?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.saveEdit();
-            });
             
-            // Cancel on button click
-            cancelBtn?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.cancelEdit();
-            });
-            
-            // Click outside to save
             this.documentClickHandler = this.handleDocumentClick.bind(this);
             setTimeout(() => {
                 document.addEventListener('click', this.documentClickHandler!);
             }, 0);
         }
 
-        // Swipe detection (only when not editing)
+        // SWIPE + LONG-PRESS (only when not editing)
         if (this.contentElement && !this.isEditing) {
+            let isPotentialSwipe = false;
+            let startX = 0;
+            let startY = 0;
+            
+            // Unified touch start handler
+            const touchStartHandler = (e: TouchEvent) => {
+                e.stopPropagation();
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                isPotentialSwipe = false;
+                
+                // Start long-press timer
+                this.longPressTimer = window.setTimeout(() => {
+                    // Only trigger if we haven't moved much (not a swipe)
+                    if (!isPotentialSwipe) {
+                        this.enterEditMode();
+                    }
+                    this.longPressTimer = null;
+                }, this.LONG_PRESS_DURATION);
+            };
+            
+            // Unified touch move handler
+            const touchMoveHandler = (e: TouchEvent) => {
+                if (!this.longPressTimer && !this.swipeDetector) return;
+                
+                const currentX = e.touches[0].clientX;
+                const currentY = e.touches[0].clientY;
+                const diffX = Math.abs(currentX - startX);
+                const diffY = Math.abs(currentY - startY);
+                
+                // If horizontal movement dominates, it's a swipe attempt
+                if (diffX > diffY && diffX > 10) {
+                    isPotentialSwipe = true;
+                    
+                    // Cancel long-press
+                    if (this.longPressTimer) {
+                        clearTimeout(this.longPressTimer);
+                        this.longPressTimer = null;
+                    }
+                }
+                
+                // Let swipe detector handle the movement
+                if (this.swipeDetector) {
+                    // The swipe detector will process via its own handlers
+                    // We just need to ensure we're not blocking it
+                }
+            };
+            
+            // Unified touch end handler
+            const touchEndHandler = () => {
+                if (this.longPressTimer) {
+                    clearTimeout(this.longPressTimer);
+                    this.longPressTimer = null;
+                }
+                
+                // If it wasn't a swipe, it might be a tap - do nothing special
+                // Swipe detector will handle swipe completion
+            };
+            
+            // Attach unified touch handlers
+            this.contentElement.addEventListener('touchstart', touchStartHandler);
+            this.contentElement.addEventListener('touchmove', touchMoveHandler);
+            this.contentElement.addEventListener('touchend', touchEndHandler);
+            this.contentElement.addEventListener('touchcancel', touchEndHandler);
+
+            // Swipe detection (still works independently)
             const swipeCallbacks: SwipeCallbacks = {
                 onDragMove: (offset) => {
-                    if (this.isProcessing) return;
+                    if (this.isProcessing || this.isEditing) return;
                     const limitedOffset = Math.min(Math.abs(offset), 100) * Math.sign(offset);
                     this.contentElement!.style.transform = `translateX(${limitedOffset}px)`;
                 },
                 onDragEnd: () => {
-                    if (this.contentElement && !this.isProcessing) {
+                    if (this.contentElement && !this.isProcessing && !this.isEditing) {
                         this.contentElement.style.transform = 'translateX(0)';
                     }
                 },
                 onSwipeRight: () => this.handleSwipeRight(),
                 onSwipeLeft: () => this.handleSwipeLeft()
             };
+            
             this.swipeDetector = new SwipeDetector(this.contentElement, swipeCallbacks, 70);
         } else if (this.swipeDetector) {
-            // Destroy swipe detector when editing
             this.swipeDetector.destroy();
             this.swipeDetector = null;
         }
@@ -378,15 +389,6 @@ export class ListItemComponent {
             await this.callbacks.onUpdate(this.item.id, newName, newQuantity, newUnit);
         }
         
-        this.isEditing = false;
-        this.reRender();
-    }
-
-    private cancelEdit(): void {
-        if (this.documentClickHandler) {
-            document.removeEventListener('click', this.documentClickHandler);
-            this.documentClickHandler = null;
-        }
         this.isEditing = false;
         this.reRender();
     }
