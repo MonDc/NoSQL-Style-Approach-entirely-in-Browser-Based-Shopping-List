@@ -1,6 +1,7 @@
 import { ShoppingListItem, UUID, Unit } from '../../types/shopping-list.types';
 import { editModeBus } from '../../utils/event-bus';
 import { SwipeDetector, SwipeCallbacks } from './swipeable-grid/swipe-detector';
+import { ProductCardFactory } from '../components/swipeable-grid/product-card.factory';
 
 export interface ListItemCallbacks {
     onToggle: (itemId: UUID) => Promise<void>;
@@ -136,8 +137,8 @@ export class ListItemComponent {
                         ${this.item.name}
                     </div>
                     <div style="font-size: 12px; color: #666; display: flex; gap: 8px; margin-top: 4px;">
-                        <span>📦 ${this.item.quantity} ${this.item.unit}</span>
-                        ${this.item.category ? `<span>🏷️ ${this.item.category}</span>` : ''}
+                        <span>🏷️ ${this.item.quantity} ${this.item.unit}</span>
+                        ${this.item.category ? `<span>${ProductCardFactory.getEmoji(this.item.name)} ${this.item.category}</span>` : ''}
                     </div>
                 </div>
             </div>

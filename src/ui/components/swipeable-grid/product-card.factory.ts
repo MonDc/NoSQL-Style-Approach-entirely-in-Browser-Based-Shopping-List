@@ -374,4 +374,9 @@ export class ProductCardFactory {
     public static registerCustomEmoji(productName: string, emoji: string): void {
         this.DEFAULT_EMOJI_MAP[productName] = emoji;
     }
+
+    // In ProductCardFactory, add:
+    public static getEmoji(productName: string): string {
+        return this.DEFAULT_EMOJI_MAP[productName] || this.DEFAULT_EMOJI_MAP.default;
+    }
 }
