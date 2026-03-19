@@ -147,23 +147,23 @@ export class ShoppingListComponent {
     }
 }
 
-private async loadInitialData(): Promise<void> {
-    try {
-        await Promise.all([
-            this.loadListData(),
-            this.initializeSwipeableGrid()
-        ]);
-        
-        this.subscribeToListUpdates();
-        this.initLetterStrip();
-        
-        // Initialize background logo
-        this.backgroundLogo = new BackgroundLogo('search-section-container', 0.04);
-        
-    } catch (error) {
-        console.error('Failed to load initial data:', error);
+    private async loadInitialData(): Promise<void> {
+        try {
+            await Promise.all([
+                this.loadListData(),
+                this.initializeSwipeableGrid()
+            ]);
+            
+            this.subscribeToListUpdates();
+            this.initLetterStrip();
+            
+            // Initialize background logo
+            this.backgroundLogo = new BackgroundLogo('search-section-container', 0.04);
+            
+        } catch (error) {
+            console.error('Failed to load initial data:', error);
+        }
     }
-}
     /**
      * Ensure database is initialized
      */
@@ -190,7 +190,7 @@ private async loadInitialData(): Promise<void> {
                 this.swipeableGrid = new SwipeableGrid(
                     result.data,
                     {
-                        onItemClick: (product) => this.addCatalogItem(product.id, product.name),
+                        onItemClick: (product) => this.addCatalogItem(product.id, product.name, product),
                         onPageChange: (page) => console.log('Swiped to page:', page + 1)
                     },
                     {
@@ -405,46 +405,46 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
     /**
      * Load all initial data
      */
-// private async loadInitialData(): Promise<void> {
-//     await Promise.all([
-//         this.loadListData(),
-//         this.initializeSwipeableGrid()
-//     ]);
-    
-//     this.subscribeToListUpdates();
-    
-//     // Initialize canvas here - DOM is stable
-//     setTimeout(() => this.initLetterStrip(), 100);
-// }
+    // private async loadInitialData(): Promise<void> {
+    //     await Promise.all([
+    //         this.loadListData(),
+    //         this.initializeSwipeableGrid()
+    //     ]);
+        
+    //     this.subscribeToListUpdates();
+        
+    //     // Initialize canvas here - DOM is stable
+    //     setTimeout(() => this.initLetterStrip(), 100);
+    // }
 
-// private initLetterStrip(): void {
-//     const container = document.getElementById('tomato-strip-container');
-//     if (container && !this.letterStrip) {
-//         this.letterStrip = new SwipeableLetterStrip('tomato-strip-container', {
-//             onLetterSelect: (letter) => {
-//                 this.currentSearchLetter = letter.toLowerCase();
-//                 this.handleSearch();
-//             },
-//             onPageChange: (page) => console.log('Letter strip page:', page)
-//         });
-//     }
-// }
-
-
+    // private initLetterStrip(): void {
+    //     const container = document.getElementById('tomato-strip-container');
+    //     if (container && !this.letterStrip) {
+    //         this.letterStrip = new SwipeableLetterStrip('tomato-strip-container', {
+    //             onLetterSelect: (letter) => {
+    //                 this.currentSearchLetter = letter.toLowerCase();
+    //                 this.handleSearch();
+    //             },
+    //             onPageChange: (page) => console.log('Letter strip page:', page)
+    //         });
+    //     }
+    // }
 
 
-// private async loadInitialData(): Promise<void> {
-//     await Promise.all([
-//         this.loadListData(),
-//         this.initializeSwipeableGrid()
-//     ]);
-    
-//     this.subscribeToListUpdates();
-//     this.initLetterStrip();
-    
-//     // Initialize background logo
-//     this.backgroundLogo = new BackgroundLogo('search-section-container', 0.1);
-// }
+
+
+    // private async loadInitialData(): Promise<void> {
+    //     await Promise.all([
+    //         this.loadListData(),
+    //         this.initializeSwipeableGrid()
+    //     ]);
+        
+    //     this.subscribeToListUpdates();
+    //     this.initLetterStrip();
+        
+    //     // Initialize background logo
+    //     this.backgroundLogo = new BackgroundLogo('search-section-container', 0.1);
+    // }
 
 
     /**
@@ -675,7 +675,7 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
     /**
      * Add item from catalog to list with beautiful green flash animation
      */
-    private async addCatalogItem(productId: string, productName: string): Promise<void> {
+    private async addCatalogItem(productId: string, productName: string, product: CatalogProduct): Promise<void> {
         if (!this.currentListId) {
             alert('No active shopping list');
             return;
@@ -755,7 +755,7 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
                 name: productName,
                 quantity: 1,
                 unit: Unit.PIECE,
-                category: 'Groceries'
+                category: product.category
             });
             
             // Wait 2/3 second before restoring
