@@ -754,7 +754,7 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
             await this.service.addItem(this.currentListId, {
                 name: productName,
                 quantity: 1,
-                unit: Unit.PIECE,
+                unit: product.defaultUnit,
                 category: product.category
             });
             
