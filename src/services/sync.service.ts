@@ -1,7 +1,7 @@
 import { UUID } from '../types/shopping-list.types';
 
 export type SyncEvent = {
-    type: 'ADD_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'TOGGLE_ITEM' | 'CLEAR_COMPLETED';
+    type: 'ADD_ITEM' | 'UPDATE_ITEM' | 'DELETE_ITEM' | 'TOGGLE_ITEM' | 'CLEAR_COMPLETED'| 'DELIVERY_CONFIRMATION';
     listId: UUID;
     data: any;
     timestamp: number;

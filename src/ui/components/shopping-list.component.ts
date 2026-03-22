@@ -464,7 +464,7 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
      * Update list UI with current data
      */
     private updateListUI(): void {
-        console.log('🔄 updateListUI called', { currentList: this.currentList });
+        console.log('🔄 updateListUI - items count:', this.currentList?.items.length);
         if (!this.currentList) return;
         
         // Update title (empty since we only show icon)
@@ -528,22 +528,22 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
         return {
             onToggle: async (itemId: UUID) => {
                 if (!this.currentListId) return;
-                await this.service.repository.toggleItemStatus(this.currentListId, itemId);
+                await this.service.toggleItemStatus(this.currentListId, itemId); // ← Call service
             },
             onDelete: async (itemId: UUID) => {
                 if (!this.currentListId) return;
-                await this.service.repository.removeItemFromList(this.currentListId, itemId);
+                await this.service.removeItem(this.currentListId, itemId); // ← Call service
             },
-            onUpdate: async (itemId: UUID, newName: string) => {
+            onUpdate: async (itemId: UUID, newName: string, newQuantity?: number, newUnit?: string) => {
                 if (!this.currentListId || !this.currentList) return;
                 
-                // Find and update the item
                 const item = this.currentList.items.find(i => i.id === itemId);
                 if (item) {
                     item.name = newName;
+                    if (newQuantity !== undefined) item.quantity = newQuantity;
+                    if (newUnit !== undefined) item.unit = newUnit as any;
                     item.updatedAt = new Date();
                     
-                    // Save to repository
                     await this.service.repository.update(this.currentListId, {
                         items: this.currentList.items
                     });

@@ -208,7 +208,7 @@ export class ShoppingListService {
 
     private async _addItem(
         listId: UUID,
-        itemData: {
+        itemData: IShoppingListItem | {
             name: string;
             quantity: number;
             unit: Unit;
@@ -218,27 +218,50 @@ export class ShoppingListService {
         },
         isRemote: boolean
     ): Promise<OperationResult<ShoppingList>> {
-        console.log('📝 _addItem called', { isRemote, listId, itemData });
-
         try {
-            const validation = this.validator.validateNewItem(itemData);
-            if (!validation.isValid) {
-                throw new Error(validation.errors.join(', '));
+            // Validate (only if it's not a full remote item)
+            if (!isRemote) {
+                const validation = this.validator.validateNewItem(itemData as any);
+                if (!validation.isValid) {
+                    throw new Error(validation.errors.join(', '));
+                }
             }
 
-            const newItem: IShoppingListItem = {
-                id: generateId(),
-                name: itemData.name,
-                quantity: itemData.quantity,
-                unit: itemData.unit,
-                priority: itemData.priority || Priority.MEDIUM,
-                category: itemData.category,
-                notes: itemData.notes,
-                status: ItemStatus.PENDING,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                tags: []
-            };
+            // Create the item
+            let newItem: IShoppingListItem;
+            
+            if (isRemote) {
+                // Remote: use the full item from broadcast
+                const remoteItem = itemData as IShoppingListItem;
+                newItem = {
+                    ...remoteItem,
+                    createdAt: new Date(remoteItem.createdAt),
+                    updatedAt: new Date(remoteItem.updatedAt)
+                };
+            } else {
+                // Local: generate ID and timestamps
+                const localData = itemData as {
+                    name: string;
+                    quantity: number;
+                    unit: Unit;
+                    priority?: Priority;
+                    category?: string;
+                    notes?: string;
+                };
+                newItem = {
+                    id: generateId(),
+                    name: localData.name,
+                    quantity: localData.quantity,
+                    unit: localData.unit,
+                    priority: localData.priority || Priority.MEDIUM,
+                    category: localData.category,
+                    notes: localData.notes,
+                    status: ItemStatus.PENDING,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    tags: []
+                };
+            }
 
             const listResult = await this.repository.findById(listId);
             if (!listResult.success || !listResult.data) {
@@ -253,26 +276,20 @@ export class ShoppingListService {
 
             const result = await this.repository.update(listId, updatedList);
 
-            if (result.success && result.data) {
-                this.errorHandler.logInfo('Item added to list', { listId, itemId: newItem.id });
-
-                // Broadcast to other devices (unless this is already a remote sync)
+            if (result.success && result.data && !isRemote) {
                 const sync = this.getSyncService();
-                if (!isRemote && sync) {
-                    console.log('📤 BROADCASTING ADD_ITEM via sync service');
+                if (sync) {
                     sync.broadcast({
                         type: 'ADD_ITEM',
                         listId,
-                        data: itemData
+                        data: newItem
                     });
-                } else {
-                    console.log('⏭️ NOT broadcasting', { isRemote, hasSync: !!sync });
                 }
             }
 
             return this.mapToModelResult(result);
         } catch (error) {
-            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to add item to list');
+            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to add item');
         }
     }
 
@@ -298,10 +315,11 @@ export class ShoppingListService {
 
             const updateResult = await this.repository.update(listId, list.toJSON());
 
+            // ✅ BROADCAST TOGGLE EVENT
             if (!isRemote) {
                 const sync = this.getSyncService();
                 if (sync) {
-                    console.log('📤 BROADCASTING TOGGLE_ITEM');
+                    console.log('📤 Broadcasting TOGGLE_ITEM');
                     sync.broadcast({
                         type: 'TOGGLE_ITEM',
                         listId,
@@ -320,29 +338,38 @@ export class ShoppingListService {
      * Remove item from list
      */
     public async removeItem(listId: UUID, itemId: UUID): Promise<OperationResult<ShoppingList>> {
+        console.log('🗑️ removeItem called'); // ← ADD THIS
+        
         try {
             const result = await this.repository.removeItemFromList(listId, itemId);
-
+            console.log('🗑️ result:', result.success); // ← ADD THIS
+            
             const sync = this.getSyncService();
+            console.log('🗑️ sync exists:', !!sync); // ← ADD THIS
+            
             if (sync) {
-                console.log('📤 BROADCASTING DELETE_ITEM');
+                console.log('📤 BROADCAST DELETE_ITEM'); // ← ADD THIS
                 sync.broadcast({
                     type: 'DELETE_ITEM',
                     listId,
                     data: { itemId }
                 });
             }
-
+            
             return this.mapToModelResult(result);
         } catch (error) {
+            console.error('❌ removeItem error:', error);
             return this.errorHandler.handleError<ShoppingList>(error, 'Failed to remove item');
         }
     }
-
     /**
      * Clear all completed items
      */
     public async clearCompleted(listId: UUID): Promise<OperationResult<ShoppingList>> {
+        return this._clearCompleted(listId, false);
+    }
+
+    private async _clearCompleted(listId: UUID, isRemote: boolean): Promise<OperationResult<ShoppingList>> {
         try {
             const listResult = await this.getList(listId);
             if (!listResult.success || !listResult.data) {
@@ -351,18 +378,18 @@ export class ShoppingListService {
 
             const list = listResult.data;
             const clearedCount = list.clearCompleted();
+            
             if (clearedCount === 0) {
                 return { success: true, data: list, message: 'No completed items to clear' };
             }
 
             const updateResult = await this.repository.update(listId, list.toJSON());
 
-            if (updateResult.success) {
-                this.errorHandler.logInfo(`Cleared ${clearedCount} completed items`, { listId });
-
+            // ✅ BROADCAST CLEAR COMPLETED EVENT
+            if (!isRemote) {
                 const sync = this.getSyncService();
                 if (sync) {
-                    console.log('📤 BROADCASTING CLEAR_COMPLETED');
+                    console.log('📤 Broadcasting CLEAR_COMPLETED');
                     sync.broadcast({
                         type: 'CLEAR_COMPLETED',
                         listId,
@@ -503,12 +530,115 @@ export class ShoppingListService {
                 case 'ADD_ITEM':
                     await this.applyRemoteAdd(event.listId, event.data);
                     break;
-                // TODO: Add cases for UPDATE_ITEM, DELETE_ITEM, etc.
-                default:
+                case 'TOGGLE_ITEM':
+                    await this.applyRemoteToggle(event.listId, event.data);
+                    break;
+                case 'DELETE_ITEM':
+                    await this.applyRemoteDelete(event.listId, event.data);
+                    break;
+                case 'UPDATE_ITEM':
+                    await this.applyRemoteUpdate(event.listId, event.data);
+                    break;
+                case 'CLEAR_COMPLETED':
+                    await this.applyRemoteClear(event.listId);
+                    break;
                     console.warn('⚠️ Unknown remote event type:', event.type);
+                case 'DELIVERY_CONFIRMATION':
+                    // Ignore - it's just server acknowledging receipt
+                    break;
             }
         } catch (error) {
             console.error('❌ Error handling remote event:', error);
+        }
+    }
+
+    private async applyRemoteToggle(listId: UUID, data: { itemId: UUID }): Promise<void> {
+        await this._toggleItemStatus(listId, data.itemId, true);
+    }
+
+    private async applyRemoteDelete(listId: UUID, data: { itemId: UUID }): Promise<void> {
+            console.log('🗑️ applyRemoteDelete for item:', data.itemId);
+    
+        // Check if item exists before deletion
+        const list = await this.repository.findById(listId);
+        const itemExists = list.data?.items.some(i => i.id === data.itemId);
+        console.log('🗑️ Item exists on this device:', itemExists);
+        
+        await this.repository.removeItemFromList(listId, data.itemId);
+    }
+
+    private async applyRemoteUpdate(listId: UUID, data: { itemId: UUID, updates: any }): Promise<void> {
+        await this._updateItem(listId, data.itemId, data.updates, true);
+    }
+
+    private async applyRemoteClear(listId: UUID): Promise<void> {
+        await this._clearCompleted(listId, true);
+    }
+
+    /**
+     * Update item details (edit mode)
+     */
+    public async updateItem(
+        listId: UUID,
+        itemId: UUID,
+        updates: {
+            name?: string;
+            quantity?: number;
+            unit?: Unit;
+            category?: string;
+        }
+    ): Promise<OperationResult<ShoppingList>> {
+        return this._updateItem(listId, itemId, updates, false);
+    }
+
+    private async _updateItem(
+        listId: UUID,
+        itemId: UUID,
+        updates: {
+            name?: string;
+            quantity?: number;
+            unit?: Unit;
+            category?: string;
+        },
+        isRemote: boolean
+    ): Promise<OperationResult<ShoppingList>> {
+        try {
+            const listResult = await this.getList(listId);
+            if (!listResult.success || !listResult.data) {
+                throw new Error('List not found');
+            }
+
+            const list = listResult.data;
+            const item = list.items.find(i => i.id === itemId);
+            if (!item) {
+                throw new Error('Item not found');
+            }
+
+            // Apply updates
+            if (updates.name) item.name = updates.name;
+            if (updates.quantity) item.quantity = updates.quantity;
+            if (updates.unit) item.unit = updates.unit;
+            if (updates.category) item.category = updates.category;
+            item.updatedAt = new Date();
+
+            const updateResult = await this.repository.update(listId, list.toJSON());
+
+            // ✅ BROADCAST UPDATE EVENT
+            if (!isRemote) {
+                const sync = this.getSyncService();
+                if (sync) {
+                    console.log('📤 Broadcasting UPDATE_ITEM');
+                    sync.broadcast({
+                        type: 'UPDATE_ITEM',
+                        listId,
+                        data: { itemId, updates }
+                    });
+                }
+            }
+
+            return this.mapToModelResult(updateResult);
+        } catch (error) {
+            return this.errorHandler.handleError<ShoppingList>(error, 'Failed to update item');
         }
     }
 }
