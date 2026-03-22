@@ -537,17 +537,12 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
             onUpdate: async (itemId: UUID, newName: string, newQuantity?: number, newUnit?: string) => {
                 if (!this.currentListId || !this.currentList) return;
                 
-                const item = this.currentList.items.find(i => i.id === itemId);
-                if (item) {
-                    item.name = newName;
-                    if (newQuantity !== undefined) item.quantity = newQuantity;
-                    if (newUnit !== undefined) item.unit = newUnit as any;
-                    item.updatedAt = new Date();
-                    
-                    await this.service.repository.update(this.currentListId, {
-                        items: this.currentList.items
-                    });
-                }
+                const updates: any = { name: newName };
+                if (newQuantity !== undefined) updates.quantity = newQuantity;
+                if (newUnit !== undefined) updates.unit = newUnit;
+                
+                // ✅ Call the SERVICE method, not repository directly
+                await this.service.updateItem(this.currentListId, itemId, updates);
             }
         };
     }
