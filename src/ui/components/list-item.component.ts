@@ -386,8 +386,20 @@ export class ListItemComponent {
         const newQuantity = quantityInput ? parseFloat(quantityInput.value) : this.item.quantity;
         const newUnit = unitSelect?.value as any || this.item.unit;
         
-        if (newName && newName !== this.item.name && this.callbacks.onUpdate) {
-            await this.callbacks.onUpdate(this.item.id, newName, newQuantity, newUnit);
+        console.log('💾 saveEdit called', { newName, newQuantity, newUnit });
+
+        // Save even if name didn't change (quantity/unit might have changed)
+        if (newName && this.callbacks.onUpdate) {
+            const nameChanged = newName !== this.item.name;
+            const quantityChanged = newQuantity !== this.item.quantity;
+            const unitChanged = newUnit !== this.item.unit;
+            
+            if (nameChanged || quantityChanged || unitChanged) {
+                console.log('💾 Calling onUpdate with changes:', { nameChanged, quantityChanged, unitChanged });
+                await this.callbacks.onUpdate(this.item.id, newName, newQuantity, newUnit);
+            } else {
+                console.log('💾 No changes detected, skipping save');
+            }
         }
         
         this.isEditing = false;
