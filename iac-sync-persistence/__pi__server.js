@@ -39,6 +39,7 @@ function saveEvent(event, sourceId) {
 
 // Create HTTP server first (for health checks)
 const server = http.createServer((req, res) => {
+    // ===== HEALTH CHECK ENDPOINT =====
     if (req.url === '/health') {
         res.writeHead(200, { 
             'Content-Type': 'application/json',
@@ -49,65 +50,67 @@ const server = http.createServer((req, res) => {
             clients: clients.size,
             timestamp: Date.now() 
         }));
-    } else {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-            <html>
-                <head><title>WebSocket Relay Server</title></head>
-                <body>
-                    <h1>✅ WebSocket Relay Server</h1>
-                    <p>Status: Running</p>
-                    <p>Connected clients: ${clients.size}</p>
-                    <p>Port: ${PORT}</p>
-                    <p><a href="/health">Health Check</a></p>
-                </body>
-            </html>
-        `);
+        return;
     }
-});
-
-// HTTP endpoint to handle missed events:
-if (req.url === '/sync' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    req.on('end', () => {
-        try {
-            const { listId, lastSequence } = JSON.parse(body);
-            
-            // Query events after lastSequence
-            db.all(
-                `SELECT id, list_id, event_type, event_data, timestamp, source_id 
-                 FROM sync_events 
-                 WHERE list_id = ? AND id > ? 
-                 ORDER BY id ASC`,
-                [listId, lastSequence || 0],
-                (err, rows) => {
-                    if (err) {
-                        res.writeHead(500);
-                        res.end(JSON.stringify({ error: err.message }));
-                        return;
+    
+    // ===== SYNC ENDPOINT (MISSED EVENTS) =====
+    if (req.url === '/sync' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { listId, lastSequence } = JSON.parse(body);
+                
+                // Query events after lastSequence
+                db.all(
+                    `SELECT id, list_id, event_type, event_data, timestamp, source_id 
+                     FROM sync_events 
+                     WHERE list_id = ? AND id > ? 
+                     ORDER BY id ASC`,
+                    [listId, lastSequence || 0],
+                    (err, rows) => {
+                        if (err) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ error: err.message }));
+                            return;
+                        }
+                        
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ 
+                            events: rows.map(row => ({
+                                type: row.event_type,
+                                listId: row.list_id,
+                                data: JSON.parse(row.event_data),
+                                timestamp: row.timestamp,
+                                sourceId: row.source_id,
+                                sequence: row.id
+                            }))
+                        }));
                     }
-                    
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ 
-                        events: rows.map(row => ({
-                            type: row.event_type,
-                            listId: row.list_id,
-                            data: JSON.parse(row.event_data),
-                            timestamp: row.timestamp,
-                            sourceId: row.source_id,
-                            sequence: row.id
-                        }))
-                    }));
-                }
-            );
-        } catch (e) {
-            res.writeHead(400);
-            res.end(JSON.stringify({ error: 'Invalid request' }));
-        }
-    });
-    return;
-}
+                );
+            } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Invalid request' }));
+            }
+        });
+        return;
+    }
+    
+    // ===== DEFAULT HTML PAGE =====
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(`
+        <html>
+            <head><title>WebSocket Relay Server</title></head>
+            <body>
+                <h1>✅ WebSocket Relay Server</h1>
+                <p>Status: Running</p>
+                <p>Connected clients: ${clients.size}</p>
+                <p>Port: ${PORT}</p>
+                <p><a href="/health">Health Check</a></p>
+            </body>
+        </html>
+    `);
+});
 
 // Attach WebSocket to HTTP server with configuration
 const wss = new WebSocket.Server({ 
@@ -354,4 +357,3 @@ process.on('SIGTERM', () => {
 });
 
 console.log(`🚀 Server starting... Press Ctrl+C to stop\n`);
-
