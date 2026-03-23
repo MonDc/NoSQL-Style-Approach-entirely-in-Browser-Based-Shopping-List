@@ -27,6 +27,7 @@ export class ShoppingListService {
     private _syncService: SyncService | null = null;
     private clientId: string;
     private _currentListId: UUID | null = null;
+    private lastSequence: number = 0;
 
     constructor() {
         this.repository = new ShoppingListRepository();
@@ -60,7 +61,7 @@ export class ShoppingListService {
             return;
         }
         try {
-            this._syncService = new SyncService(serverUrl, this.clientId);
+            this._syncService = new SyncService(serverUrl, this.clientId, this._currentListId);
             console.log('✅ _syncService created');
             
             // Subscribe to remote sync events
@@ -525,6 +526,12 @@ export class ShoppingListService {
      */
     private async handleRemoteEvent(event: SyncEvent): Promise<void> {
         console.log('🔄 Handling remote event:', event.type, event);
+
+            if (event.sequence && event.sequence > this.lastSequence) {
+                this.lastSequence = event.sequence;
+                this.saveLastSequence(event.sequence);
+            }
+            
         try {
             switch (event.type) {
                 case 'ADD_ITEM':
@@ -640,5 +647,15 @@ export class ShoppingListService {
         } catch (error) {
             return this.errorHandler.handleError<ShoppingList>(error, 'Failed to update item');
         }
+    }
+
+    public saveLastSequence(seq: number): void {
+    this.lastSequence = seq;
+    localStorage.setItem(`last_sequence_${this._currentListId}`, seq.toString());
+    }
+
+    public loadLastSequence(): number {
+        const stored = localStorage.getItem(`last_sequence_${this._currentListId}`);
+        return stored ? parseInt(stored) : 0;
     }
 }
