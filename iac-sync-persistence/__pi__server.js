@@ -1,13 +1,13 @@
 const WebSocket = require('ws');
 const http = require('http');
 const os = require('os');
-const sqlite3 = require('sqlite3').verbose(); // ✅ NEW
+const sqlite3 = require('sqlite3').verbose();
 
 const PORT = 8080;
-const PING_INTERVAL = 30000; // 30 seconds
-const MAX_MESSAGE_SIZE = 1024 * 100; // 100KB limit
+const PING_INTERVAL = 30000;
+const MAX_MESSAGE_SIZE = 1024 * 100;
 
-// ✅ NEW: Database setup
+// Database setup
 const db = new sqlite3.Database('swipetomaten_sync_sqlite.db');
 db.run(`
     CREATE TABLE IF NOT EXISTS sync_events (
@@ -23,7 +23,7 @@ db.run(`
     else console.log('✅ SQLite database ready');
 });
 
-// ✅ NEW: Function to save events
+// Function to save events
 function saveEvent(event, sourceId) {
     const { type, listId, data, timestamp } = event;
     const eventData = JSON.stringify(data);
@@ -37,14 +37,23 @@ function saveEvent(event, sourceId) {
     );
 }
 
-// Create HTTP server first (for health checks)
+// Create HTTP server
 const server = http.createServer((req, res) => {
+    // ===== CORS HEADERS =====
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Handle preflight OPTIONS request
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+    
     // ===== HEALTH CHECK ENDPOINT =====
     if (req.url === '/health') {
-        res.writeHead(200, { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*'
-        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ 
             status: 'healthy', 
             clients: clients.size,
@@ -61,7 +70,6 @@ const server = http.createServer((req, res) => {
             try {
                 const { listId, lastSequence } = JSON.parse(body);
                 
-                // Query events after lastSequence
                 db.all(
                     `SELECT id, list_id, event_type, event_data, timestamp, source_id 
                      FROM sync_events 
@@ -112,17 +120,17 @@ const server = http.createServer((req, res) => {
     `);
 });
 
-// Attach WebSocket to HTTP server with configuration
+// Attach WebSocket to HTTP server
 const wss = new WebSocket.Server({ 
     server,
     maxPayload: MAX_MESSAGE_SIZE,
     clientTracking: true,
-    perMessageDeflate: false // Disable compression for lower latency
+    perMessageDeflate: false
 });
 
-const clients = new Map(); // Store client metadata
+const clients = new Map();
 
-// Log all network interfaces for debugging
+// Log network interfaces
 console.log('\n📡 Server IP addresses:');
 const interfaces = os.networkInterfaces();
 Object.keys(interfaces).forEach((iface) => {
@@ -134,7 +142,7 @@ Object.keys(interfaces).forEach((iface) => {
 });
 console.log('');
 
-// Start the server
+// Start server
 server.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 WebSocket Relay Server started`);
     console.log(`=================================`);
@@ -156,7 +164,6 @@ wss.on('connection', (ws, req) => {
     console.log(`   📍 Address: ${clientAddress}`);
     console.log(`   🔢 Total clients: ${clients.size + 1}`);
 
-    // Store client metadata
     clients.set(ws, {
         id: clientId,
         address: clientAddress,
@@ -166,7 +173,6 @@ wss.on('connection', (ws, req) => {
         messageCount: 0
     });
 
-    // Send welcome message with connection info
     ws.send(JSON.stringify({
         type: 'WELCOME',
         message: 'Connected to relay server',
@@ -176,7 +182,6 @@ wss.on('connection', (ws, req) => {
         serverTime: Date.now()
     }));
 
-    // Set up ping interval to keep connection alive
     const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.ping();
@@ -186,21 +191,18 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', (message) => {
         try {
-            // Update client metadata
             const client = clients.get(ws);
             if (client) {
                 client.lastSeen = Date.now();
                 client.messageCount++;
             }
 
-            // Log received message (truncate if too long)
             const messageStr = message.toString();
             const logMsg = messageStr.length > 200 
                 ? messageStr.substring(0, 200) + '...' 
                 : messageStr;
             console.log(`📨 [${clientId}] Received: ${logMsg}`);
 
-            // Parse and validate message
             let parsed;
             try {
                 parsed = JSON.parse(messageStr);
@@ -214,7 +216,6 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
-            // Validate required fields
             if (!parsed.type || !parsed.listId) {
                 console.error(`❌ [${clientId}] Missing required fields in message`);
                 ws.send(JSON.stringify({
@@ -225,17 +226,14 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
-            // Add server timestamp if not present
             if (!parsed.timestamp) {
                 parsed.timestamp = Date.now();
             }
 
-            // ✅ NEW: Save to database (skip CLIENT_COUNT_UPDATE to avoid noise)
             if (parsed.type !== 'CLIENT_COUNT_UPDATE') {
                 saveEvent(parsed, parsed.sourceId || clientId);
             }
 
-            // Relay to all other clients
             let relayCount = 0;
             const messageStrRelay = JSON.stringify(parsed);
             
@@ -248,7 +246,6 @@ wss.on('connection', (ws, req) => {
 
             console.log(`📤 [${clientId}] Relayed ${relayCount} client(s) - Type: ${parsed.type}`);
 
-            // Send delivery confirmation for critical messages
             if (parsed.type === 'ADD_ITEM' || parsed.type === 'DELETE_ITEM') {
                 ws.send(JSON.stringify({
                     type: 'DELIVERY_CONFIRMATION',
@@ -297,7 +294,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Broadcast client count updates periodically
+// Broadcast client count updates
 setInterval(() => {
     const count = clients.size;
     const countMessage = JSON.stringify({
@@ -317,7 +314,6 @@ setInterval(() => {
 setInterval(() => {
     const now = Date.now();
     clients.forEach((client, ws) => {
-        // If no message for 2 minutes, consider stale
         if (now - client.lastSeen > 120000) {
             console.log(`🧹 [${client.id}] Closing stale connection`);
             ws.terminate();
@@ -325,7 +321,6 @@ setInterval(() => {
     });
 }, 60000);
 
-// Handle server errors
 server.on('error', (error) => {
     console.error('❌ Server error:', error);
 });
@@ -334,13 +329,11 @@ server.on('error', (error) => {
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server...');
     
-    // ✅ NEW: Close database connection
     db.close((err) => {
         if (err) console.error('❌ Error closing database:', err);
         else console.log('✅ Database closed');
     });
     
-    // Close all WebSocket connections
     clients.forEach((client, ws) => {
         ws.close(1000, 'Server shutting down');
     });
