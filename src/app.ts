@@ -23,9 +23,9 @@ class ShoppingListApp {
     this.listService = new ShoppingListService();
     this.errorHandler = ErrorHandler.getInstance();
     
-    // ENABLE SYNC BEFORE CREATING COMPONENT - THIS IS THE KEY CHANGE
-    const PI_IP = '192.168.178.21'; // Your Pi's actual IP
-    this.listService.enableSync(`ws://${PI_IP}:8080`);
+    // ENABLE SYNC BEFORE CREATING COMPONENT - THIS IS THE KEY CHANGE [I now enable sync inside ensureListExists() after the list ID is known.]
+    //const PI_IP = '192.168.178.21'; // Your Pi's actual IP
+    //this.listService.enableSync(`ws://${PI_IP}:8080`);
     
     // Create main UI component (mounts to #app) - NOW SYNC IS ALREADY ENABLED
     this.listComponent = new ShoppingListComponent('app', this.listService);

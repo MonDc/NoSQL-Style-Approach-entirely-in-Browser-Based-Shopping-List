@@ -54,24 +54,22 @@ export class ShoppingListService {
      * Enable real-time sync between devices
      * @param serverUrl WebSocket server URL (e.g., ws://192.168.178.21:8080)
      */
-    public enableSync(serverUrl: string): void {
-        console.log('🔌 enableSync CALLED with URL:', serverUrl);
-        if (!serverUrl) {
-            console.error('❌ No server URL provided');
-            return;
+    // In ShoppingListService
+    public enableSync(serverUrl: string, listId: UUID): void {
+        if (this._syncService) {
+            this._syncService.disconnect();
         }
-        try {
-            this._syncService = new SyncService(serverUrl, this.clientId, this._currentListId);
-            console.log('✅ _syncService created');
-            
-            // Subscribe to remote sync events
-            this._syncService.onSync((event: SyncEvent) => {
-                this.handleRemoteEvent(event);
-            });
-            console.log('✅ Subscribed to remote sync events');
-        } catch (error) {
-            console.error('❌ Failed to create syncService:', error);
-        }
+        
+        this._syncService = new SyncService(serverUrl, this.clientId);
+        this._syncService.onSync((event) => this.handleRemoteEvent(event));
+        this._syncService.connect();
+        
+        // Set listId after connection is established
+        setTimeout(() => {
+            if (this._syncService) {
+                this._syncService.setListId(listId);
+            }
+        }, 100);
     }
 
     /**
@@ -239,6 +237,7 @@ export class ShoppingListService {
                     createdAt: new Date(remoteItem.createdAt),
                     updatedAt: new Date(remoteItem.updatedAt)
                 };
+                 console.log('📝 Remote add - saving item:', newItem.name);
             } else {
                 // Local: generate ID and timestamps
                 const localData = itemData as {
@@ -564,14 +563,14 @@ export class ShoppingListService {
     }
 
     private async applyRemoteDelete(listId: UUID, data: { itemId: UUID }): Promise<void> {
-            console.log('🗑️ applyRemoteDelete for item:', data.itemId);
-    
-        // Check if item exists before deletion
         const list = await this.repository.findById(listId);
         const itemExists = list.data?.items.some(i => i.id === data.itemId);
-        console.log('🗑️ Item exists on this device:', itemExists);
         
-        await this.repository.removeItemFromList(listId, data.itemId);
+        if (itemExists) {
+            await this.repository.removeItemFromList(listId, data.itemId);
+        } else {
+            console.log('🗑️ Skipping delete - item does not exist');
+        }
     }
 
     private async applyRemoteUpdate(listId: UUID, data: { itemId: UUID, updates: any }): Promise<void> {
@@ -657,5 +656,11 @@ export class ShoppingListService {
     public loadLastSequence(): number {
         const stored = localStorage.getItem(`last_sequence_${this._currentListId}`);
         return stored ? parseInt(stored) : 0;
+    }
+
+    public updateSyncListId(listId: UUID): void {
+        if (this._syncService) {
+            this._syncService.updateListId(listId);
+        }
     }
 }

@@ -222,33 +222,31 @@ export class ShoppingListComponent {
             this.showError('Failed to load products');  // ← Use showError instead
         }
     }
+
     /**
-     * Create or get today's shopping list
+     * Create or get the shared shopping list
      */
     private async ensureListExists(): Promise<void> {
-    const stableId = generateStableUUID('demo-user:shared-shopping-list');
-    
-    // Try to get the stable list
-    const listResult = await this.service.getList(stableId as UUID);
-    
-    if (listResult.success && listResult.data) {
-        this.currentListId = stableId as UUID;
-        this.currentList = listResult.data;
-        this.service.setCurrentList(this.currentListId);
-        console.log('📋 Using stable shared list:', this.currentListId);
-    } else {
-        // Create new list with stable ID
-        const newList = await this.service.createList(
-        'Shared Shopping List',
-        'demo-user'
-        );
+        const stableId = generateStableUUID('demo-user:shared-shopping-list');
+        const listResult = await this.service.getList(stableId as UUID);
         
-        if (newList.success && newList.data) {
-        this.currentListId = newList.data.id;
-        this.currentList = newList.data;
-        console.log('🆕 Created stable shared list:', this.currentListId);
+        if (listResult.success && listResult.data) {
+            this.currentListId = stableId as UUID;
+            this.currentList = listResult.data;
+            this.service.setCurrentList(this.currentListId);
+            
+            // Enable sync AFTER list ID is known
+            this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+        } else {
+            const newList = await this.service.createList('Shared Shopping List', 'demo-user');
+            if (newList.success && newList.data) {
+                this.currentListId = newList.data.id;
+                this.currentList = newList.data;
+                
+                // Enable sync AFTER list ID is known
+                this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+            }
         }
-    }
     }
 
     /**
@@ -464,6 +462,8 @@ this.container.querySelectorAll('.letter-btn').forEach(btn => {
      * Update list UI with current data
      */
     private updateListUI(): void {
+        console.log('🔄 updateListUI - items:', this.currentList?.items.map(i => i.name));
+        console.log('🔄 updateListUI - count "currentList?.items.length":', this.currentList?.items.length);
         console.log('🔄 updateListUI - items count:', this.currentList?.items.length);
         if (!this.currentList) return;
         

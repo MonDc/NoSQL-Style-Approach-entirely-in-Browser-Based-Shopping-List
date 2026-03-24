@@ -113,24 +113,32 @@ export class ShoppingListRepository extends BaseRepository<ShoppingList, Shoppin
   /**
    * Remove item from list
    */
-  public async removeItemFromList(listId: UUID, itemId: UUID): Promise<OperationResult<ShoppingList>> {
+public async removeItemFromList(listId: UUID, itemId: UUID): Promise<OperationResult<ShoppingList>> {
     try {
-      const listResult = await this.findById(listId);
-      if (!listResult.success || !listResult.data) {
-        throw new Error('List not found');
-      }
+        const listResult = await this.findById(listId);
+        if (!listResult.success || !listResult.data) {
+            throw new Error('List not found');
+        }
 
-      const list = listResult.data;
-      const updatedItems = list.items.filter(item => item.id !== itemId);
-
-      return this.update(listId, { 
-        items: updatedItems,
-        updatedAt: new Date()
-      });
+        const list = listResult.data;
+        
+        // ADD THESE DEBUG LINES
+        console.log('🗑️ Before filter, items:', list.items.map(i => i.id));
+        console.log('🗑️ Looking for itemId:', itemId);
+        
+        const updatedItems = list.items.filter(item => item.id !== itemId);
+        
+        console.log('🗑️ After filter, items count:', updatedItems.length);
+        console.log('🗑️ Removed item?', updatedItems.length !== list.items.length);
+        
+        return this.update(listId, { 
+            items: updatedItems,
+            updatedAt: new Date()
+        });
     } catch (error) {
-      return this.handleError<ShoppingList>(error, 'Failed to remove item from list');
+        return this.handleError<ShoppingList>(error, 'Failed to remove item from list');
     }
-  }
+}
 
   /**
    * Toggle item completion status

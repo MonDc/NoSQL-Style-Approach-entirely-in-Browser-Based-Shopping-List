@@ -229,6 +229,8 @@ export abstract class BaseRepository<T extends { id: UUID }, Schema> {
    * @example const result = await repo.update(itemId, { quantity: 3 });
    */
   public async update(id: UUID, updates: Partial<T>): Promise<OperationResult<T>> {
+        console.log('💾 repository.update called with updates:', updates);
+        console.trace(); // This shows the call stack
     try {
       const db = await this.getDb();
       
@@ -310,10 +312,12 @@ console.log('🔔 Repository notified subscribers for update', updated.id);
    * @example const unsubscribe = repo.subscribe((event) => console.log('Data changed:', event));
    */
   public subscribe(callback: (event: DataEvent<T>) => void): () => void {
-    this.subscribers.push(callback);
-    return () => {
-      this.subscribers = this.subscribers.filter(cb => cb !== callback);
-    };
+      console.log('📢 New subscriber added. Total subscribers:', this.subscribers.length + 1);
+      this.subscribers.push(callback);
+      return () => {
+          this.subscribers = this.subscribers.filter(cb => cb !== callback);
+          console.log('📢 Subscriber removed. Remaining:', this.subscribers.length);
+      };
   }
 
   /**

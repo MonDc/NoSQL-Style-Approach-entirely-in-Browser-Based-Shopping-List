@@ -6,7 +6,7 @@ export type SyncEvent = {
     data: any;
     timestamp: number;
     sourceId: string;
-    sequence?: number; // ← NEW: sequence number from server for tracking
+    sequence?: number;
 };
 
 export class SyncService {
@@ -14,26 +14,30 @@ export class SyncService {
     private reconnectAttempts = 0;
     private maxReconnect = 5;
     private listeners: ((event: SyncEvent) => void)[] = [];
-    
-    // ← NEW: last-seen sync properties
     private currentListId: string = '';
     private lastSequence: number = 0;
+    private isConnected = false;
 
-    constructor(private serverUrl: string, private clientId: string, listId: string) {
-        this.currentListId = listId;
-        this.loadLastSequence(); // ← NEW: restore last known sequence
-        console.log('🔌 SyncService created with URL:', serverUrl);
-        this.connect();
+    constructor(private serverUrl: string, private clientId: string) {
+        console.log('🔌 SyncService created');
     }
 
-    // ← NEW: load last sequence from localStorage
+    public setListId(listId: string): void {
+        this.currentListId = listId;
+        this.loadLastSequence();
+        console.log(`📊 SyncService listId set to: ${listId}, lastSequence: ${this.lastSequence}`);
+        
+        // If already connected, fetch missed events immediately
+        if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+            this.fetchAndReplayMissed();
+        }
+    }
+
     private loadLastSequence(): void {
         const stored = localStorage.getItem(`last_sequence_${this.currentListId}`);
         this.lastSequence = stored ? parseInt(stored) : 0;
-        console.log(`📊 Last sequence: ${this.lastSequence}`);
     }
 
-    // ← NEW: save sequence to localStorage
     private saveLastSequence(seq: number): void {
         if (seq > this.lastSequence) {
             this.lastSequence = seq;
@@ -41,7 +45,22 @@ export class SyncService {
         }
     }
 
-    // ← NEW: fetch missed events from server
+    private async fetchAndReplayMissed(): Promise<void> {
+        if (!this.currentListId) {
+            console.log('⏭️ No listId set, skipping missed events fetch');
+            return;
+        }
+
+        const missed = await this.fetchMissedEvents();
+        if (missed.length > 0) {
+            console.log(`📥 Replaying ${missed.length} missed events`);
+            missed.forEach(event => {
+                this.listeners.forEach(cb => cb(event));
+                if (event.sequence) this.saveLastSequence(event.sequence);
+            });
+        }
+    }
+
     private async fetchMissedEvents(): Promise<SyncEvent[]> {
         try {
             const host = this.serverUrl.replace('ws://', '').replace('wss://', '').split(':')[0];
@@ -54,7 +73,7 @@ export class SyncService {
                 })
             });
             const data = await response.json();
-            console.log(`📥 Fetched ${data.events?.length || 0} missed events`);
+            console.log(`📥 Fetched ${data.events?.length || 0} missed events (lastSequence: ${this.lastSequence})`);
             return data.events || [];
         } catch (error) {
             console.error('Failed to fetch missed events:', error);
@@ -62,40 +81,42 @@ export class SyncService {
         }
     }
 
-    private connect(): void {
+    public connect(): void {
+        if (this.ws?.readyState === WebSocket.OPEN) return;
+        
         this.ws = new WebSocket(this.serverUrl);
 
         this.ws.onopen = async () => {
             console.log('✅ Connected to sync server');
+            this.isConnected = true;
             this.reconnectAttempts = 0;
             
-            // ← NEW: fetch missed events on reconnect
-            const missed = await this.fetchMissedEvents();
-            missed.forEach(event => {
-                console.log(`🔄 Replaying missed event: ${event.type}`);
-                this.listeners.forEach(cb => cb(event));
-            });
+            // Only fetch if listId is already set
+            if (this.currentListId) {
+                await this.fetchAndReplayMissed();
+            }
         };
 
         this.ws.onmessage = (event) => {
-            console.log('📩 RAW:', event.data);
             try {
                 const data = JSON.parse(event.data);
-                console.log('📦 PARSED:', data);
-                console.log('🔍 Type:', data.type);
-                console.log('🎯 Source:', data.sourceId, 'vs Client:', this.clientId);
                 
-                // ← NEW: update sequence if present
+                // Ignore server control messages
+                if (data.type === 'WELCOME' || data.type === 'CLIENT_COUNT_UPDATE' || data.type === 'DELIVERY_CONFIRMATION') {
+                    return;
+                }
+                
+                // Ignore own messages
+                if (data.sourceId === this.clientId) {
+                    return;
+                }
+                
+                // Update sequence
                 if (data.sequence) {
                     this.saveLastSequence(data.sequence);
                 }
                 
-                if (data.sourceId === this.clientId) {
-                    console.log('⏭️ Ignoring own message');
-                    return;
-                }
-                
-                console.log('📢 Forwarding to listeners');
+                // Forward to listeners
                 this.listeners.forEach(cb => cb(data));
             } catch (e) {
                 console.error('Parse error:', e);
@@ -104,6 +125,7 @@ export class SyncService {
 
         this.ws.onclose = () => {
             console.log('🔌 Disconnected from sync server');
+            this.isConnected = false;
             this.reconnect();
         };
 
@@ -121,7 +143,7 @@ export class SyncService {
     }
 
     public broadcast(event: any): void {
-        if (!this.ws || this.ws.readyState !== 1) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
             console.warn('⚠️ WebSocket not ready');
             return;
         }
@@ -134,10 +156,6 @@ export class SyncService {
         }
     }
 
-    public isConnected(): boolean {
-        return this.ws !== null && this.ws.readyState === 1;
-    }
-
     public onSync(callback: (event: SyncEvent) => void): () => void {
         this.listeners.push(callback);
         return () => {
@@ -147,5 +165,16 @@ export class SyncService {
 
     public disconnect(): void {
         this.ws?.close();
+    }
+
+    public updateListId(listId: string): void {
+        console.log('🔄 SyncService updating listId to:', listId);
+        this.currentListId = listId;
+        this.loadLastSequence();
+        
+        // If already connected, fetch missed events immediately
+        if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
+            this.fetchAndReplayMissed();
+        }
     }
 }
