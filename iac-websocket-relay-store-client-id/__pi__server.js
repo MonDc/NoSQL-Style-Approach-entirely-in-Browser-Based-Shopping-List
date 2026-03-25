@@ -23,10 +23,15 @@ db.run(`
     else console.log('✅ SQLite database ready');
 });
 
+// Store clientId mapping (WebSocket -> clientId)
+const clientIdMap = new Map();
+
 // Function to save events
 function saveEvent(event, sourceId) {
     const { type, listId, data, timestamp } = event;
     const eventData = JSON.stringify(data);
+    
+    console.log(`💾 Saving event: ${type} for list ${listId} from ${sourceId}`);
     
     db.run(
         'INSERT INTO sync_events (list_id, event_type, event_data, timestamp, source_id) VALUES (?, ?, ?, ?, ?)',
@@ -157,15 +162,15 @@ server.listen(PORT, '0.0.0.0', () => {
 wss.on('connection', (ws, req) => {
     const clientAddress = req.socket.remoteAddress;
     const clientPort = req.socket.remotePort;
-    const clientId = `${clientAddress}:${clientPort}`;
+    const ipClientId = `${clientAddress}:${clientPort}`;
     const connectTime = Date.now();
     
-    console.log(`🔌 [${clientId}] New client connected`);
+    console.log(`🔌 [${ipClientId}] New client connected`);
     console.log(`   📍 Address: ${clientAddress}`);
     console.log(`   🔢 Total clients: ${clients.size + 1}`);
 
     clients.set(ws, {
-        id: clientId,
+        id: ipClientId,
         address: clientAddress,
         port: clientPort,
         connectTime,
@@ -177,7 +182,7 @@ wss.on('connection', (ws, req) => {
         type: 'WELCOME',
         message: 'Connected to relay server',
         timestamp: Date.now(),
-        clientId: clientId,
+        clientId: ipClientId,
         clientCount: clients.size,
         serverTime: Date.now()
     }));
@@ -185,7 +190,7 @@ wss.on('connection', (ws, req) => {
     const pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
             ws.ping();
-            console.log(`💓 [${clientId}] Ping sent`);
+            console.log(`💓 [${ipClientId}] Ping sent`);
         }
     }, PING_INTERVAL);
 
@@ -201,13 +206,13 @@ wss.on('connection', (ws, req) => {
             const logMsg = messageStr.length > 200 
                 ? messageStr.substring(0, 200) + '...' 
                 : messageStr;
-            console.log(`📨 [${clientId}] Received: ${logMsg}`);
+            console.log(`📨 [${ipClientId}] Received: ${logMsg}`);
 
             let parsed;
             try {
                 parsed = JSON.parse(messageStr);
             } catch (e) {
-                console.error(`❌ [${clientId}] Invalid JSON received:`, e.message);
+                console.error(`❌ [${ipClientId}] Invalid JSON received:`, e.message);
                 ws.send(JSON.stringify({
                     type: 'ERROR',
                     error: 'Invalid JSON format',
@@ -217,7 +222,7 @@ wss.on('connection', (ws, req) => {
             }
 
             if (!parsed.type || !parsed.listId) {
-                console.error(`❌ [${clientId}] Missing required fields in message`);
+                console.error(`❌ [${ipClientId}] Missing required fields in message`);
                 ws.send(JSON.stringify({
                     type: 'ERROR',
                     error: 'Message must contain type and listId',
@@ -226,26 +231,47 @@ wss.on('connection', (ws, req) => {
                 return;
             }
 
+            // Extract or store the client's unique ID
+            let storedClientId = ipClientId;
+            if (parsed.clientId) {
+                storedClientId = parsed.clientId;
+                // Store the mapping for future messages
+                if (!clientIdMap.has(ws)) {
+                    clientIdMap.set(ws, storedClientId);
+                    console.log(`🏷️ [${ipClientId}] Registered clientId: ${storedClientId}`);
+                }
+            } else if (clientIdMap.has(ws)) {
+                storedClientId = clientIdMap.get(ws);
+            }
+
             if (!parsed.timestamp) {
                 parsed.timestamp = Date.now();
             }
 
+            // Save to database using the real clientId
             if (parsed.type !== 'CLIENT_COUNT_UPDATE') {
-                saveEvent(parsed, parsed.sourceId || clientId);
+                saveEvent(parsed, storedClientId);
             }
 
+            // Relay to all other clients
             let relayCount = 0;
-            const messageStrRelay = JSON.stringify(parsed);
+            
+            // Create message with the proper sourceId
+            const messageToRelay = JSON.stringify({
+                ...parsed,
+                sourceId: storedClientId
+            });
             
             clients.forEach((clientData, client) => {
                 if (client !== ws && client.readyState === WebSocket.OPEN) {
-                    client.send(messageStrRelay);
+                    client.send(messageToRelay);
                     relayCount++;
                 }
             });
 
-            console.log(`📤 [${clientId}] Relayed ${relayCount} client(s) - Type: ${parsed.type}`);
+            console.log(`📤 [${ipClientId}] Relayed ${relayCount} client(s) - Type: ${parsed.type} (sourceId: ${storedClientId})`);
 
+            // Send delivery confirmation for critical messages
             if (parsed.type === 'ADD_ITEM' || parsed.type === 'DELETE_ITEM') {
                 ws.send(JSON.stringify({
                     type: 'DELIVERY_CONFIRMATION',
@@ -257,7 +283,7 @@ wss.on('connection', (ws, req) => {
             }
 
         } catch (error) {
-            console.error(`❌ [${clientId}] Error processing message:`, error.message);
+            console.error(`❌ [${ipClientId}] Error processing message:`, error.message);
             ws.send(JSON.stringify({
                 type: 'ERROR',
                 error: 'Internal server error',
@@ -267,7 +293,7 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('pong', () => {
-        console.log(`💓 [${clientId}] Pong received`);
+        console.log(`💓 [${ipClientId}] Pong received`);
         const client = clients.get(ws);
         if (client) {
             client.lastSeen = Date.now();
@@ -277,12 +303,15 @@ wss.on('connection', (ws, req) => {
     ws.on('close', (code, reason) => {
         clearInterval(pingInterval);
         
+        // Clean up mapping
+        clientIdMap.delete(ws);
+        
         const client = clients.get(ws);
         const duration = client ? ((Date.now() - client.connectTime) / 1000).toFixed(1) : '?';
         const msgCount = client ? client.messageCount : 0;
         
         clients.delete(ws);
-        console.log(`🔌 [${clientId}] Disconnected`);
+        console.log(`🔌 [${ipClientId}] Disconnected`);
         console.log(`   ⏱️  Duration: ${duration}s`);
         console.log(`   📊 Messages handled: ${msgCount}`);
         console.log(`   🔢 Total clients: ${clients.size}`);
@@ -290,7 +319,7 @@ wss.on('connection', (ws, req) => {
     });
 
     ws.on('error', (error) => {
-        console.error(`❌ [${clientId}] WebSocket error:`, error.message);
+        console.error(`❌ [${ipClientId}] WebSocket error:`, error.message);
     });
 });
 
