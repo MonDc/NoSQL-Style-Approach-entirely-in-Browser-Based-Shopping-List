@@ -1,0 +1,8 @@
+CREATE TABLE sync_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        event_data TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        source_id TEXT NOT NULL
+    );
