@@ -217,6 +217,8 @@ export class ShoppingListService {
         },
         isRemote: boolean
     ): Promise<OperationResult<ShoppingList>> {
+        console.log(`📝 _addItem called: isRemote=${isRemote}, item=${(itemData as any).name}`);
+        
         try {
             // Validate (only if it's not a full remote item)
             if (!isRemote) {
@@ -237,7 +239,6 @@ export class ShoppingListService {
                     createdAt: new Date(remoteItem.createdAt),
                     updatedAt: new Date(remoteItem.updatedAt)
                 };
-                 console.log('📝 Remote add - saving item:', newItem.name);
             } else {
                 // Local: generate ID and timestamps
                 const localData = itemData as {
@@ -268,6 +269,15 @@ export class ShoppingListService {
                 throw new Error('List not found');
             }
 
+            // ✅ IDEMPOTENCY CHECK: For remote adds, skip if item already exists
+            if (isRemote) {
+                const exists = listResult.data.items.some(i => i.id === newItem.id);
+                if (exists) {
+                    console.log(`⏭️ Item already exists (id: ${newItem.id}), skipping`);
+                    return this.mapToModelResult(listResult);
+                }
+            }
+
             const updatedList = {
                 ...listResult.data,
                 items: [newItem, ...listResult.data.items],
@@ -279,10 +289,12 @@ export class ShoppingListService {
             if (result.success && result.data && !isRemote) {
                 const sync = this.getSyncService();
                 if (sync) {
+                    // ✅ Include eventId in broadcast (will be added by sync service)
                     sync.broadcast({
                         type: 'ADD_ITEM',
                         listId,
-                        data: newItem
+                        data: newItem,
+                        clientId: this.clientId
                     });
                 }
             }

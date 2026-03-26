@@ -7,6 +7,7 @@ export type SyncEvent = {
     timestamp: number;
     sourceId: string;
     sequence?: number;
+    eventId?: string;  // ← ADDED for idempotency
 };
 
 export class SyncService {
@@ -17,9 +18,11 @@ export class SyncService {
     private currentListId: string = '';
     private lastSequence: number = 0;
     private isConnected = false;
+    private processedEvents = new Set<string>();
 
     constructor(private serverUrl: string, private clientId: string) {
         console.log('🔌 SyncService created');
+        this.loadProcessedEvents();  // ← Load processed events on creation
     }
 
     public setListId(listId: string): void {
@@ -54,10 +57,30 @@ export class SyncService {
         const missed = await this.fetchMissedEvents();
         if (missed.length > 0) {
             console.log(`📥 Replaying ${missed.length} missed events`);
-            missed.forEach(event => {
+            
+            for (const event of missed) {
+                // ✅ Skip already processed events by eventId
+                if (event.eventId && this.processedEvents.has(event.eventId)) {
+                    console.log(`⏭️ Skipping already processed event: ${event.eventId}`);
+                    continue;
+                }
+                
+                // Forward to listeners
                 this.listeners.forEach(cb => cb(event));
-                if (event.sequence) this.saveLastSequence(event.sequence);
-            });
+                
+                // Mark as processed
+                if (event.eventId) {
+                    this.processedEvents.add(event.eventId);
+                    this.saveProcessedEvents();
+                }
+                
+                if (event.sequence) {
+                    this.saveLastSequence(event.sequence);
+                }
+                
+                // Small delay between events to prevent race conditions
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
         }
     }
 
@@ -91,6 +114,12 @@ export class SyncService {
             this.isConnected = true;
             this.reconnectAttempts = 0;
             
+            // Send client registration
+            this.ws?.send(JSON.stringify({
+                type: 'REGISTER',
+                clientId: this.clientId
+            }));
+            
             // Only fetch if listId is already set
             if (this.currentListId) {
                 await this.fetchAndReplayMissed();
@@ -111,9 +140,21 @@ export class SyncService {
                     return;
                 }
                 
+                // ✅ Skip already processed events by eventId
+                if (data.eventId && this.processedEvents.has(data.eventId)) {
+                    console.log(`⏭️ Skipping already processed event: ${data.eventId}`);
+                    return;
+                }
+                
                 // Update sequence
                 if (data.sequence) {
                     this.saveLastSequence(data.sequence);
+                }
+                
+                // ✅ Mark as processed
+                if (data.eventId) {
+                    this.processedEvents.add(data.eventId);
+                    this.saveProcessedEvents();
                 }
                 
                 // Forward to listeners
@@ -149,8 +190,13 @@ export class SyncService {
         }
         
         try {
-            this.ws.send(JSON.stringify(event));
-            console.log('📤 Broadcast sent:', event.type);
+            // ✅ Ensure every broadcast has a unique eventId
+            const eventWithId = {
+                ...event,
+                eventId: event.eventId || crypto.randomUUID()
+            };
+            this.ws.send(JSON.stringify(eventWithId));
+            console.log(`📤 Broadcast sent: ${event.type} (eventId: ${eventWithId.eventId})`);
         } catch (error) {
             console.error('❌ Broadcast failed:', error);
         }
@@ -175,6 +221,26 @@ export class SyncService {
         // If already connected, fetch missed events immediately
         if (this.isConnected && this.ws?.readyState === WebSocket.OPEN) {
             this.fetchAndReplayMissed();
+        }
+    }
+
+    private loadProcessedEvents(): void {
+        const stored = localStorage.getItem('processed_events');
+        if (stored) {
+            try {
+                this.processedEvents = new Set(JSON.parse(stored));
+                console.log(`📋 Loaded ${this.processedEvents.size} processed events from localStorage`);
+            } catch (e) {
+                console.error('Failed to load processed events:', e);
+            }
+        }
+    }
+
+    private saveProcessedEvents(): void {
+        try {
+            localStorage.setItem('processed_events', JSON.stringify([...this.processedEvents]));
+        } catch (e) {
+            console.error('Failed to save processed events:', e);
         }
     }
 }
