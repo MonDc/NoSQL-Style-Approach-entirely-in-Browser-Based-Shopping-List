@@ -2,16 +2,27 @@ const WebSocket = require('ws');
 const http = require('http');
 const os = require('os');
 const sqlite3 = require('sqlite3').verbose();
+const crypto = require('crypto');
 
 const PORT = 8080;
 const PING_INTERVAL = 30000;
 const MAX_MESSAGE_SIZE = 1024 * 100;
 
-// Database setup
-const db = new sqlite3.Database('swipetomaten_sync_sqlite.db');
+// Database setup with new event_id column
+const DB_FILE = 'swipetomaten_sync_sqlite.db';
+
+// Delete existing database to start fresh
+const fs = require('fs');
+if (fs.existsSync(DB_FILE)) {
+    fs.unlinkSync(DB_FILE);
+    console.log('🗑️ Removed old database, starting fresh');
+}
+
+const db = new sqlite3.Database(DB_FILE);
 db.run(`
     CREATE TABLE IF NOT EXISTS sync_events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        event_id TEXT UNIQUE NOT NULL,
         list_id TEXT NOT NULL,
         event_type TEXT NOT NULL,
         event_data TEXT NOT NULL,
@@ -20,24 +31,30 @@ db.run(`
     )
 `, (err) => {
     if (err) console.error('❌ Database init error:', err);
-    else console.log('✅ SQLite database ready');
+    else console.log('✅ SQLite database ready with event_id column');
 });
 
 // Store clientId mapping (WebSocket -> clientId)
 const clientIdMap = new Map();
 
-// Function to save events
+// Function to save events with event_id
 function saveEvent(event, sourceId) {
-    const { type, listId, data, timestamp } = event;
+    const { type, listId, data, timestamp, eventId } = event;
     const eventData = JSON.stringify(data);
     
-    console.log(`💾 Saving event: ${type} for list ${listId} from ${sourceId}`);
+    // Generate eventId if not provided (for backward compatibility)
+    const finalEventId = eventId || crypto.randomUUID();
+    
+    console.log(`💾 Saving event: ${type} for list ${listId} from ${sourceId} (eventId: ${finalEventId})`);
     
     db.run(
-        'INSERT INTO sync_events (list_id, event_type, event_data, timestamp, source_id) VALUES (?, ?, ?, ?, ?)',
-        [listId, type, eventData, timestamp || Date.now(), sourceId],
+        `INSERT OR IGNORE INTO sync_events 
+        (event_id, list_id, event_type, event_data, timestamp, source_id)
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        [finalEventId, listId, type, eventData, timestamp || Date.now(), sourceId],
         (err) => {
             if (err) console.error('❌ Save error:', err);
+            else console.log(`💾 Saved (or ignored duplicate) event: ${finalEventId}`);
         }
     );
 }
@@ -76,7 +93,7 @@ const server = http.createServer((req, res) => {
                 const { listId, lastSequence } = JSON.parse(body);
                 
                 db.all(
-                    `SELECT id, list_id, event_type, event_data, timestamp, source_id 
+                    `SELECT id, event_id, list_id, event_type, event_data, timestamp, source_id 
                      FROM sync_events 
                      WHERE list_id = ? AND id > ? 
                      ORDER BY id ASC`,
@@ -96,7 +113,8 @@ const server = http.createServer((req, res) => {
                                 data: JSON.parse(row.event_data),
                                 timestamp: row.timestamp,
                                 sourceId: row.source_id,
-                                sequence: row.id
+                                sequence: row.id,
+                                eventId: row.event_id
                             }))
                         }));
                     }
@@ -248,7 +266,7 @@ wss.on('connection', (ws, req) => {
                 parsed.timestamp = Date.now();
             }
 
-            // Save to database using the real clientId
+            // Save to database using the real clientId (skip CLIENT_COUNT_UPDATE)
             if (parsed.type !== 'CLIENT_COUNT_UPDATE') {
                 saveEvent(parsed, storedClientId);
             }
@@ -256,10 +274,11 @@ wss.on('connection', (ws, req) => {
             // Relay to all other clients
             let relayCount = 0;
             
-            // Create message with the proper sourceId
+            // Create message with the proper sourceId and eventId
             const messageToRelay = JSON.stringify({
                 ...parsed,
-                sourceId: storedClientId
+                sourceId: storedClientId,
+                 eventId: parsed.eventId
             });
             
             clients.forEach((clientData, client) => {
