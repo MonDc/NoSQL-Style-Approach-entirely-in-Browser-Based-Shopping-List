@@ -2,8 +2,7 @@ import { ShoppingListService } from '../../services/shopping-list.service';
 import { CatalogRepository } from '../../db/repositories/catalog.repository';
 import { 
     ShoppingList,  
-    UUID, 
-    Unit,
+    UUID,
     CatalogProduct 
 } from '../../types/shopping-list.types';
 import { ListItemComponent, ListItemCallbacks } from './list-item.component';

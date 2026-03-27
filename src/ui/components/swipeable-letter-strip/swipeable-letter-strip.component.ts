@@ -9,7 +9,7 @@ export class SwipeableLetterStrip {
     private callbacks: SwipeableLetterStripCallbacks;
     
     // Dimensions
-    private itemWidth = 70; // 60px tomato + 10px gap
+    //private itemWidth = 70; // 60px tomato + 10px gap
     private visibleCount = 3;
     private totalItems: number;
     
