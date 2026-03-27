@@ -204,3 +204,26 @@ if (import.meta.hot) {
     }
   });
 }
+
+// ============================================================================
+//  DEVELOPMENT UTILITIES
+// ============================================================================
+
+import { resetApp } from './utils/reset.util';
+
+if (import.meta.env.DEV) {
+    // Expose reset function globally for console debugging
+    (window as any).resetApp = resetApp;
+    
+    // Helpful console message for developers
+    console.log(
+        '%c💡 Dev Tip: Run %cresetApp() %cto clear all data and reset the app',
+        'color: #4CAF50; font-weight: bold;',
+        'color: #2196F3; font-weight: bold; background: #f0f0f0; padding: 2px 6px; border-radius: 4px;',
+        'color: #4CAF50;'
+    );
+}
+
+// ============================================================================
+//  END OF DEVELOPMENT UTILITIES
+// ============================================================================
