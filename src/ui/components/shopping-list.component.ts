@@ -223,27 +223,93 @@ export class ShoppingListComponent {
     }
 
     /**
-     * Create or get the shared shopping list
+     * Creates or retrieves the shared shopping list and establishes synchronization.
+     * 
+     * This method handles the initial setup of the shopping list and configures real-time
+     * synchronization across all connected devices. It supports two synchronization modes:
+     * 
+     * - **Local Network Mode** (`ws://192.168.178.21:8080`):
+     *   Used during development or when all devices are on the same home network.
+     *   Offers low latency and direct communication without external dependencies.
+     * 
+     * - **Global Internet Mode** (`wss://*.ngrok-free.dev`):
+     *   Used in production to enable synchronization from anywhere in the world.
+     *   Uses ngrok's secure WebSocket tunnel (`wss://`) to expose the local server
+     *   to the public internet. This allows devices to sync even when not at home,
+     *   using mobile data or different Wi-Fi networks.
+     * 
+     * The synchronization URL is selected automatically based on the build environment:
+     * - `import.meta.env.DEV` = true → uses local network mode
+     * - `import.meta.env.DEV` = false → uses ngrok tunnel for global access
+     * 
+     * @example
+     * // Local development (on home network):
+     * // SYNC_URL = ws://192.168.178.21:8080
+     * 
+     * // Production (deployed to Netlify):
+     * // SYNC_URL = wss://uncomprehendingly-unmiscible-charlette.ngrok-free.dev
+     * 
+     * // Note: The stable ID is generated from a fixed string (`demo-user:shared-shopping-list`).
+     * // Without user authentication, all devices share the same list ID. Multi-user isolation
+     * // would require replacing `demo-user` with a real user ID after implementing login.
+     * 
+     * @returns {Promise<void>} A promise that resolves when the list exists and sync is enabled.
+     * 
+     * @throws {Error} If the list cannot be created or retrieved.
      */
     private async ensureListExists(): Promise<void> {
+        // Generate a deterministic ID for the shared list (same across all devices)
         const stableId = generateStableUUID('demo-user:shared-shopping-list');
         const listResult = await this.service.getList(stableId as UUID);
         
+        // Ngrok tunnel URL for public internet access (no trailing slash)
+        const NGROK_URL = 'uncomprehendingly-unmiscible-charlette.ngrok-free.dev';
+        
         if (listResult.success && listResult.data) {
+            // Existing list found – use it
             this.currentListId = stableId as UUID;
             this.currentList = listResult.data;
             this.service.setCurrentList(this.currentListId);
             
-            // Enable sync AFTER list ID is known
-            this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+            // --------------------------------------------------------------------
+            // SYNCHRONIZATION CONFIGURATION
+            // --------------------------------------------------------------------
+            // Select the appropriate sync endpoint based on the environment:
+            // - Development: Local WebSocket (home network only)
+            // - Production: Secure WebSocket via ngrok tunnel (global access)
+            // --------------------------------------------------------------------
+            
+            // OLD APPROACH (Home network only):
+            // this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+            
+            // NEW APPROACH (Global access via ngrok):
+            const SYNC_URL = import.meta.env.DEV 
+                ? `ws://192.168.178.21:8080`      // Local development (home network)
+                : `wss://${NGROK_URL}`;           // Production (worldwide sync)
+            
+            this.service.enableSync(SYNC_URL, this.currentListId);
+            
         } else {
+            // No existing list found – create a new one
             const newList = await this.service.createList('Shared Shopping List', 'demo-user');
+            
             if (newList.success && newList.data) {
                 this.currentListId = newList.data.id;
                 this.currentList = newList.data;
                 
-                // Enable sync AFTER list ID is known
-                this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+                // --------------------------------------------------------------------
+                // SYNCHRONIZATION CONFIGURATION (same as above)
+                // --------------------------------------------------------------------
+                
+                // OLD APPROACH (Home network only):
+                // this.service.enableSync(`ws://192.168.178.21:8080`, this.currentListId);
+                
+                // NEW APPROACH (Global access via ngrok):
+                const SYNC_URL = import.meta.env.DEV 
+                    ? `ws://192.168.178.21:8080`      // Local development (home network)
+                    : `wss://${NGROK_URL}`;           // Production (worldwide sync)
+                
+                this.service.enableSync(SYNC_URL, this.currentListId);
             }
         }
     }
